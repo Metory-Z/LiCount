@@ -41,6 +41,9 @@ jobs:
             echo "sdkmanager not found, relying on preinstalled SDK"
           fi
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Validate code
         run: ./gradlew compileDebugKotlin testDebugUnitTest lintDebug --no-daemon --stacktrace
 
@@ -80,7 +83,6 @@ jobs:
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace
-
       - name: Verify signing certificate
         if: steps.check_sign.outputs.has_sign == 'true'
         run: |
