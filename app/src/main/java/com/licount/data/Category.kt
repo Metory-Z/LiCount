@@ -1,4 +1,4 @@
-package com.qingzhang.data
+package com.licount.data
 
 /**
  * 预置消费分类。emoji 用作分类图标，零资源、开箱即用。

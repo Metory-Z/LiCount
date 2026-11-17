@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "QingZhang"
+rootProject.name = "LiCount"
 include(":app")

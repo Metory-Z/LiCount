@@ -1,17 +1,17 @@
-package com.qingzhang
+package com.licount
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.qingzhang.ui.QingZhangApp
+import com.licount.ui.LiCountApp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            QingZhangApp()
+            LiCountApp()
         }
     }
 }

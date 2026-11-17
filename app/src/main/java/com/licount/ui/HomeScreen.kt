@@ -1,4 +1,4 @@
-package com.qingzhang.ui
+package com.licount.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -15,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.qingzhang.data.Category
+import com.licount.data.Category
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

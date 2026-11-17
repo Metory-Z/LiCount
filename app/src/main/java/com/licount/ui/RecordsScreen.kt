@@ -1,4 +1,4 @@
-package com.qingzhang.ui
+package com.licount.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -13,8 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.qingzhang.data.Category
-import com.qingzhang.data.Transaction
+import com.licount.data.Category
+import com.licount.data.Transaction
 
 /** 流水列表页：按时间倒序列出所有记录，左滑/点击删除。 */
 @Composable

@@ -1,4 +1,4 @@
-package com.qingzhang.ui
+package com.licount.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,8 +14,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.qingzhang.data.Category
-import com.qingzhang.data.Transaction
+import com.licount.data.Category
+import com.licount.data.Transaction
 
 /** 统计页：本月各分类支出占比（横向条形）+ 汇总。 */
 @Composable

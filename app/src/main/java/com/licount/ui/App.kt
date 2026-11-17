@@ -1,4 +1,4 @@
-package com.qingzhang.ui
+package com.licount.ui
 
 import android.app.Activity
 import androidx.activity.compose.BackHandler
@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.qingzhang.MainViewModel
-import com.qingzhang.ui.theme.QingZhangTheme
-import com.qingzhang.ui.theme.rememberIsDarkTheme
+import com.licount.MainViewModel
+import com.licount.ui.theme.LiCountTheme
+import com.licount.ui.theme.rememberIsDarkTheme
 import kotlinx.coroutines.launch
 import kotlin.math.min
 
@@ -50,7 +50,7 @@ private val NavLabelStyle = TextStyle(
 )
 
 @Composable
-fun QingZhangApp() {
+fun LiCountApp() {
     val vm: MainViewModel = viewModel()
     val darkTheme = isSystemInDarkTheme()
     val activity = LocalContext.current as? Activity
@@ -62,7 +62,7 @@ fun QingZhangApp() {
             }
         }
     }
-    QingZhangTheme(darkTheme = darkTheme) {
+    LiCountTheme(darkTheme = darkTheme) {
         AppContent(vm)
     }
 }

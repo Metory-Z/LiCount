@@ -1,4 +1,4 @@
-package com.qingzhang.ui
+package com.licount.ui
 
 import android.os.Build
 import androidx.compose.foundation.layout.Box
@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.qingzhang.ui.theme.rememberIsDarkTheme
+import com.licount.ui.theme.rememberIsDarkTheme
 
 /** 卡片默认内边距。 */
 val DashboardCardPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)

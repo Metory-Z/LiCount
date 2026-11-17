@@ -1,12 +1,12 @@
-package com.qingzhang
+package com.licount
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.qingzhang.data.AppDatabase
-import com.qingzhang.data.TimeUtils
-import com.qingzhang.data.Transaction
-import com.qingzhang.data.TransactionDao
+import com.licount.data.AppDatabase
+import com.licount.data.TimeUtils
+import com.licount.data.Transaction
+import com.licount.data.TransactionDao
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine

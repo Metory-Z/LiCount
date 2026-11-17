@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.qingzhang"
+    namespace = "com.licount"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.qingzhang"
+        applicationId = "com.licount"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

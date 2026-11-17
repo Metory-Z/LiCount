@@ -1,4 +1,4 @@
-package com.qingzhang.ui.theme
+package com.licount.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -103,7 +103,7 @@ fun rememberIsDarkTheme(): Boolean = LocalDarkTheme.current
 
 /** 轻账主题：FlClash 风格，浅色背景/白色表面，或深色背景/略亮表面。 */
 @Composable
-fun QingZhangTheme(
+fun LiCountTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     seed: Long = 0xFF249B76L,

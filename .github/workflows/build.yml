@@ -73,12 +73,12 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
         run: |
           umask 077
-          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/qingzhang.jks"
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/licount.jks"
 
       - name: Build release APK
         if: steps.check_sign.outputs.has_sign == 'true'
         env:
-          SIGNING_KEY_PATH: ${{ runner.temp }}/qingzhang.jks
+          SIGNING_KEY_PATH: ${{ runner.temp }}/licount.jks
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -90,13 +90,13 @@ jobs:
 
       - name: Remove restored key
         if: always()
-        run: rm -f "$RUNNER_TEMP/qingzhang.jks"
+        run: rm -f "$RUNNER_TEMP/licount.jks"
 
       - name: Upload debug APK
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
-          name: QingZhang-debug
+          name: LiCount-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
@@ -104,7 +104,7 @@ jobs:
         if: github.event_name != 'pull_request' && steps.check_sign.outputs.has_sign == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: QingZhang-release
+          name: LiCount-release
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 

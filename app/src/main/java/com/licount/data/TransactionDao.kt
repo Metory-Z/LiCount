@@ -1,4 +1,4 @@
-package com.qingzhang.data
+package com.licount.data
 
 import androidx.room.Dao
 import androidx.room.Insert

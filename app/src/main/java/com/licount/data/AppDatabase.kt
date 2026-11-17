@@ -1,4 +1,4 @@
-package com.qingzhang.data
+package com.licount.data
 
 import android.content.Context
 import androidx.room.Database
@@ -18,7 +18,7 @@ abstract class AppDatabase : RoomDatabase() {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "qingzhang.db"
+                    "licount.db"
                 ).build().also { instance = it }
             }
     }

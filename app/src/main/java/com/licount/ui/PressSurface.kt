@@ -1,4 +1,4 @@
-package com.qingzhang.ui
+package com.licount.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
