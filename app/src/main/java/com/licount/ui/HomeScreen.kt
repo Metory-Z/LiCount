@@ -2,9 +2,9 @@ package com.licount.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
@@ -23,12 +23,13 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 首页：极简快记。
- * 上半区（本月收支 / 提醒 / 切换 / 金额 / 分类）可滚动并占满剩余空间；
- * 下半区（数字键盘 + 保存按钮）固定钉在屏幕底部、悬浮导航栏上方，
- * 保证任何屏幕高度下键盘和「保存」都无需上滑即可点到。
+ * 首页：一整块记账面板，整页不滚动。
+ *
+ * 顶部一条紧凑的本月收支信息条；下方一张完整输入卡，内部依次是
+ * 金额展示区（吸收剩余高度）、收支切换、单行横滑分类、数字键盘与保存。
+ * 键盘始终位于卡片底部、悬浮导航栏上方，任何屏幕高度下都无需上滑。
+ * 矮屏通过 BoxWithConstraints 自动收紧间距与按键高度，不引入滚动。
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     monthExpense: Long,
@@ -49,126 +50,124 @@ fun HomeScreen(
     }
     val canSave = amountFen > 0
 
-    Column(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
-            .padding(top = 4.dp, bottom = bottomInset),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(top = 4.dp, bottom = bottomInset)
     ) {
-        // ===== 上半区：可滚动，占满剩余空间 =====
+        // 可用高度偏小时整体降一档：优先保证键盘与保存完整可见
+        val compact = maxHeight < 560.dp
+        val outerGap = if (compact) 6.dp else 10.dp
+        val innerGap = if (compact) 6.dp else 8.dp
+        val cardPadding = if (compact) 10.dp else 12.dp
+        val keyGap = if (compact) 4.dp else 6.dp
+        val keyPadding = if (compact) 6.dp else 9.dp
+        val savePadding = if (compact) 8.dp else 11.dp
+        val chipPadding = if (compact) 6.dp else 8.dp
+        val baseAmountSize = if (compact) 32.sp else 38.sp
+        val amountFontSize = if (amountText.length > 8) {
+            if (compact) 26.sp else 30.sp
+        } else {
+            baseAmountSize
+        }
+
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(outerGap)
         ) {
-            // 概览卡：提醒 + 本月支出/收入 + 收支切换 + 金额
+            // ===== 顶部信息条：本月支出 / 收入，固定一行 =====
             DashboardCard(
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+                contentPadding = PaddingValues(
+                    horizontal = 16.dp,
+                    vertical = if (compact) 8.dp else 10.dp
+                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    // 今日未记账提醒
-                    if (!todayRecorded) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    MaterialTheme.colorScheme.errorContainer,
-                                    SquircleShape(ControlCorner)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            "本月支出",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            formatMoney(monthExpense),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "本月收入",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            formatMoney(monthIncome),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            // ===== 一整张输入卡：金额 / 类型 / 分类 / 键盘 / 保存 =====
+            DashboardCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp, vertical = cardPadding),
+                    verticalArrangement = Arrangement.spacedBy(innerGap)
+                ) {
+                    // 金额展示区：吃掉所有剩余高度，提醒在上、金额靠底部右侧
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        if (!todayRecorded) {
+                            Row(
+                                modifier = Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.errorContainer,
+                                        SquircleShape(ControlCorner)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text("📌", fontSize = 11.sp)
+                                Text(
+                                    "今天还没记账，记一笔吧",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
                                 )
-                                .padding(horizontal = 12.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text("📌", fontSize = 13.sp)
-                            Text(
-                                "今天还没记账，记一笔吧",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-
-                    // 本月支出 / 收入
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                "本月支出",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                formatMoney(monthExpense),
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                "本月收入",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                formatMoney(monthIncome),
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    // 支出 / 收入 切换 + 清空
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TypeToggle(
-                            label = "支出",
-                            selected = !isIncome,
-                            onClick = { isIncome = false },
-                            modifier = Modifier.weight(1f)
-                        )
-                        TypeToggle(
-                            label = "收入",
-                            selected = isIncome,
-                            onClick = { isIncome = true },
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (amountText.isNotEmpty()) {
-                            TextButton(onClick = { amountText = "" }) {
-                                Text("清空", fontSize = 13.sp)
                             }
                         }
-                    }
-
-                    // 金额显示
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surfaceContainerHigh,
-                                SquircleShape(BlockCorner)
-                            )
-                            .padding(vertical = 10.dp, horizontal = 20.dp),
-                        contentAlignment = Alignment.CenterEnd
-                    ) {
-                        Row(verticalAlignment = Alignment.Bottom) {
+                        Spacer(Modifier.weight(1f))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
                             Text(
                                 "¥",
-                                fontSize = 22.sp,
+                                fontSize = 20.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 if (amountText.isEmpty()) "0" else amountText,
-                                fontSize = 38.sp,
+                                fontSize = amountFontSize,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isIncome) {
                                     MaterialTheme.colorScheme.primary
@@ -179,46 +178,74 @@ fun HomeScreen(
                             )
                         }
                     }
-                }
-            }
 
-            // 分类卡（两行流式，不再溢出）
-            DashboardCard(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Category.presets.forEach { cat ->
-                        CategoryChip(
-                            category = cat,
-                            selected = selectedCategory == cat.key,
-                            onClick = { selectedCategory = cat.key }
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                    )
+
+                    // 支出 / 收入 切换 + 清空
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TypeToggle(
+                            label = "支出",
+                            selected = !isIncome,
+                            verticalPadding = chipPadding,
+                            onClick = { isIncome = false },
+                            modifier = Modifier.weight(1f)
                         )
+                        TypeToggle(
+                            label = "收入",
+                            selected = isIncome,
+                            verticalPadding = chipPadding,
+                            onClick = { isIncome = true },
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (amountText.isNotEmpty()) {
+                            TextButton(onClick = { amountText = "" }) {
+                                Text("清空", fontSize = 13.sp)
+                            }
+                        }
                     }
+
+                    // 分类：单行横向滑动，不再占两行、不再把内容撑出屏幕
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Category.presets.forEach { cat ->
+                            CategoryChip(
+                                category = cat,
+                                selected = selectedCategory == cat.key,
+                                verticalPadding = chipPadding,
+                                onClick = { selectedCategory = cat.key }
+                            )
+                        }
+                        Spacer(Modifier.width(2.dp))
+                    }
+
+                    NumPad(
+                        canSave = canSave,
+                        keyGap = keyGap,
+                        keyPadding = keyPadding,
+                        savePadding = savePadding,
+                        onInput = { key -> amountText = handleInput(amountText, key) },
+                        onSave = {
+                            if (canSave) {
+                                // 收入记为负数，支出为正数
+                                onSave(if (isIncome) -amountFen else amountFen, selectedCategory)
+                                amountText = ""
+                            }
+                        }
+                    )
                 }
             }
-        }
-
-        // ===== 下半区：固定键盘 + 保存，永远可见 =====
-        DashboardCard(
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            NumPad(
-                canSave = canSave,
-                onInput = { key -> amountText = handleInput(amountText, key) },
-                onSave = {
-                    if (canSave) {
-                        // 收入记为负数，支出为正数
-                        onSave(if (isIncome) -amountFen else amountFen, selectedCategory)
-                        amountText = ""
-                    }
-                }
-            )
         }
     }
 }
@@ -228,6 +255,7 @@ fun HomeScreen(
 private fun TypeToggle(
     label: String,
     selected: Boolean,
+    verticalPadding: Dp,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -251,7 +279,7 @@ private fun TypeToggle(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(bg)
-                .padding(vertical = 8.dp),
+                .padding(vertical = verticalPadding),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -268,6 +296,7 @@ private fun TypeToggle(
 private fun CategoryChip(
     category: Category,
     selected: Boolean,
+    verticalPadding: Dp,
     onClick: () -> Unit
 ) {
     val bg by animateColorAsState(
@@ -283,12 +312,12 @@ private fun CategoryChip(
     PressSurface(
         onClick = onClick,
         shape = SquircleCapsule,
-        role = androidx.compose.ui.semantics.Role.RadioButton
+        role = Role.RadioButton
     ) {
         Row(
             modifier = Modifier
                 .background(bg)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = verticalPadding),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -303,19 +332,22 @@ private fun CategoryChip(
     }
 }
 
-/** 数字键盘：1-9、0、小数点、退格、保存。整块固定在底部，不参与滚动。 */
+/** 数字键盘：1-9、0、小数点、退格、保存，全部位于同一张输入卡内。 */
 @Composable
 private fun NumPad(
     canSave: Boolean,
+    keyGap: Dp,
+    keyPadding: Dp,
+    savePadding: Dp,
     onInput: (String) -> Unit,
     onSave: () -> Unit
 ) {
     val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫")
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(keyGap)) {
         keys.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(keyGap)) {
                 row.forEach { key ->
-                    KeyButton(key, Modifier.weight(1f)) { onInput(key) }
+                    KeyButton(key, keyPadding, Modifier.weight(1f)) { onInput(key) }
                 }
             }
         }
@@ -333,7 +365,7 @@ private fun NumPad(
                         if (canSave) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.surfaceContainerHigh
                     )
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = savePadding),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -354,6 +386,7 @@ private fun NumPad(
 @Composable
 private fun KeyButton(
     key: String,
+    verticalPadding: Dp,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -367,7 +400,7 @@ private fun KeyButton(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(vertical = 10.dp),
+                .padding(vertical = verticalPadding),
             contentAlignment = Alignment.Center
         ) {
             if (isDelete) {
