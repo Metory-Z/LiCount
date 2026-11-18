@@ -57,17 +57,19 @@ fun HomeScreen(
             .padding(top = 4.dp, bottom = bottomInset)
     ) {
         // 可用高度偏小时整体降一档：优先保证键盘与保存完整可见
-        val compact = maxHeight < 560.dp
+        val compact = maxHeight < 600.dp
         val outerGap = if (compact) 6.dp else 10.dp
-        val innerGap = if (compact) 6.dp else 8.dp
+        // 卡内间距适度加大，把原本堆在金额上方的大片空白匀给控件之间
+        val innerGap = if (compact) 8.dp else 12.dp
         val cardPadding = if (compact) 10.dp else 12.dp
         val keyGap = if (compact) 4.dp else 6.dp
-        val keyPadding = if (compact) 6.dp else 9.dp
-        val savePadding = if (compact) 8.dp else 11.dp
+        // 键盘整行定高，退格键与数字键完全等高
+        val keyHeight = if (compact) 50.dp else 56.dp
+        val savePadding = if (compact) 9.dp else 13.dp
         val chipPadding = if (compact) 6.dp else 8.dp
-        val baseAmountSize = if (compact) 32.sp else 38.sp
+        val baseAmountSize = if (compact) 34.sp else 42.sp
         val amountFontSize = if (amountText.length > 8) {
-            if (compact) 26.sp else 30.sp
+            if (compact) 28.sp else 32.sp
         } else {
             baseAmountSize
         }
@@ -204,11 +206,6 @@ fun HomeScreen(
                             onClick = { isIncome = true },
                             modifier = Modifier.weight(1f)
                         )
-                        if (amountText.isNotEmpty()) {
-                            TextButton(onClick = { amountText = "" }) {
-                                Text("清空", fontSize = 13.sp)
-                            }
-                        }
                     }
 
                     // 分类：单行横向滑动，不再占两行、不再把内容撑出屏幕
@@ -233,9 +230,10 @@ fun HomeScreen(
                     NumPad(
                         canSave = canSave,
                         keyGap = keyGap,
-                        keyPadding = keyPadding,
+                        keyHeight = keyHeight,
                         savePadding = savePadding,
                         onInput = { key -> amountText = handleInput(amountText, key) },
+                        onLongDelete = { amountText = "" },
                         onSave = {
                             if (canSave) {
                                 // 收入记为负数，支出为正数
@@ -337,17 +335,28 @@ private fun CategoryChip(
 private fun NumPad(
     canSave: Boolean,
     keyGap: Dp,
-    keyPadding: Dp,
+    keyHeight: Dp,
     savePadding: Dp,
     onInput: (String) -> Unit,
+    onLongDelete: () -> Unit,
     onSave: () -> Unit
 ) {
     val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫")
     Column(verticalArrangement = Arrangement.spacedBy(keyGap)) {
         keys.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(keyGap)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(keyHeight),
+                horizontalArrangement = Arrangement.spacedBy(keyGap)
+            ) {
                 row.forEach { key ->
-                    KeyButton(key, keyPadding, Modifier.weight(1f)) { onInput(key) }
+                    KeyButton(
+                        key = key,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        onLongClick = if (key == "⌫") onLongDelete else null,
+                        onClick = { onInput(key) }
+                    )
                 }
             }
         }
@@ -386,28 +395,28 @@ private fun NumPad(
 @Composable
 private fun KeyButton(
     key: String,
-    verticalPadding: Dp,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val isDelete = key == "⌫"
     PressSurface(
         onClick = onClick,
         shape = SquircleShape(ControlCorner),
-        modifier = modifier
+        modifier = modifier,
+        onLongClick = onLongClick
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(vertical = verticalPadding),
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentAlignment = Alignment.Center
         ) {
             if (isDelete) {
                 Icon(
                     Icons.Outlined.Delete,
-                    contentDescription = "删除",
-                    modifier = Modifier.size(20.dp),
+                    contentDescription = "删除（长按清空）",
+                    modifier = Modifier.size(22.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
