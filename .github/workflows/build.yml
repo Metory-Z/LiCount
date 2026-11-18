@@ -44,13 +44,8 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Validate code
-        run: ./gradlew compileDebugKotlin testDebugUnitTest lintDebug --no-daemon --stacktrace
-
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-
-      # ---- 以下步骤需要签名密钥；未配置 Secrets 时安全跳过 ----
+      # ---- 签名密钥：集中注入到 GITHUB_ENV，后续所有 Gradle 步骤共用同一把密钥 ----
+      # debug 与 release 都用固定签名，保证任意两次出包都能直接覆盖安装。
 
       - name: Check signing secrets
         id: check_sign
@@ -71,22 +66,47 @@ jobs:
         if: steps.check_sign.outputs.has_sign == 'true'
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: |
-          umask 077
-          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/licount.jks"
-
-      - name: Build release APK
-        if: steps.check_sign.outputs.has_sign == 'true'
-        env:
-          SIGNING_KEY_PATH: ${{ runner.temp }}/licount.jks
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          umask 077
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/licount.jks"
+          {
+            echo "SIGNING_KEY_PATH=$RUNNER_TEMP/licount.jks"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KEY_STORE_PASSWORD=$KEY_STORE_PASSWORD"
+            echo "KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate code
+        run: ./gradlew compileDebugKotlin testDebugUnitTest lintDebug --no-daemon --stacktrace
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Build release APK
+        if: steps.check_sign.outputs.has_sign == 'true'
         run: ./gradlew assembleRelease --no-daemon --stacktrace
+
       - name: Verify signing certificate
         if: steps.check_sign.outputs.has_sign == 'true'
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+          echo "=== debug 与 release 证书指纹（应完全一致）==="
+          for apk in app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/app-release.apk; do
+            echo "--- $apk"
+            "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$apk" | grep -i "SHA-256"
+          done
+          echo "=== 包名（应完全一致）==="
+          for apk in app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/app-release.apk; do
+            echo -n "$(basename "$apk"): "
+            "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk" 2>/dev/null | head -1 || true
+          done
+
+      - name: Rename release APK
+        if: steps.check_sign.outputs.has_sign == 'true'
+        run: mv app/build/outputs/apk/release/app-release.apk "app/build/outputs/apk/release/LiCount-${{ github.ref_name }}.apk"
 
       - name: Remove restored key
         if: always()

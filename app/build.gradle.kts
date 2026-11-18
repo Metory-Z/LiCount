@@ -12,14 +12,29 @@ android {
         applicationId = "com.licount"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
+        // 随 CI 运行号递增，保证每次出包都比上一版新，覆盖安装不会被「版本过旧」拒绝
+        versionCode = 1000 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
         versionName = "1.0.0"
+    }
+
+    // 固定签名：CI 由 GitHub Secrets 注入，本地可指向项目根目录的 licount-release.jks。
+    // 所有可供安装的 APK 必须用同一把密钥，否则 Android 会因签名不一致拒绝覆盖安装。
+    val signingPath = System.getenv("SIGNING_KEY_PATH")
+    signingConfigs {
+        create("fixed") {
+            storeFile = signingPath?.let { rootProject.file(it) }
+            storePassword = System.getenv("KEY_STORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS")
+            keyPassword = System.getenv("KEY_PASSWORD")
+        }
     }
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
+            // 不再加 applicationIdSuffix：debug 与 release 统一为 com.licount，
+            // 避免「包名不一致」导致必须卸载旧版才能安装。
             versionNameSuffix = "-debug"
+            if (signingPath != null) signingConfig = signingConfigs.getByName("fixed")
         }
         release {
             isMinifyEnabled = false
@@ -28,6 +43,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 发布包必须用固定签名；缺少密钥时构建失败，绝不静默换成随机签名
+            signingConfig = signingConfigs.getByName("fixed")
         }
     }
 

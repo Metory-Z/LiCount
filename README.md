@@ -19,13 +19,35 @@
 - DataStore
 - minSdk 26 / targetSdk 34
 
-## 构建
+## 构建与安装
+
+推荐直接下载 [Releases](../../releases) 里的 `LiCount-v*.apk`（正式签名版）。
+
+### 覆盖安装
+
+所有官方构建（debug / release）统一使用包名 `com.licount` 和同一把固定签名密钥，
+`versionCode` 随 CI 构建号递增，因此**新版本可直接覆盖安装，不会丢数据**。
+
+> 早期（2026-11-18 之前）的包使用 `com.qingzhang` / `com.licount.debug` 包名且签名不固定，
+> 从那些旧包升级时**需要卸载一次**（会清空旧数据），之后即可一直覆盖安装。
+
+### 本地构建
 
 ```bash
 ./gradlew assembleDebug
 ```
 
-debug APK 输出在 `app/build/outputs/apk/debug/`。
+release 包需要注入签名密钥（CI 由 GitHub Secrets 自动提供）：
+
+```bash
+SIGNING_KEY_PATH=licount-release.jks \
+KEY_ALIAS=licount \
+KEY_STORE_PASSWORD=<密码> \
+KEY_PASSWORD=<密码> \
+./gradlew assembleRelease
+```
+
+`licount-release.jks` 由维护者本地保管，不纳入版本库（`.gitignore` 已排除）。
 
 ## 页面
 
