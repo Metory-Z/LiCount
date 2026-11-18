@@ -1,7 +1,10 @@
 package com.licount.ui
 
 import android.app.Activity
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -33,10 +36,17 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.licount.MainViewModel
+import com.licount.RestoreMode
 import com.licount.ui.theme.LiCountTheme
 import com.licount.ui.theme.rememberIsDarkTheme
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.min
+
+private fun backupFileName(): String =
+    "LiCount-backup-${SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())}.json"
 
 private val PAGE_TITLES = listOf("记账", "流水", "统计")
 
@@ -70,12 +80,28 @@ fun LiCountApp() {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun AppContent(vm: MainViewModel) {
+    val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(0) }
+    var showBackupMenu by rememberSaveable { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = tab) { PAGE_TITLES.size }
     val scope = rememberCoroutineScope()
 
     val dashboard by vm.dashboard.collectAsState()
     val monthTx by vm.monthTransactions.collectAsState(initial = emptyList())
+    val pendingRestore by vm.pendingRestore.collectAsState()
+
+    // 系统文件选择器：导出用 CreateDocument，导入用 OpenDocument（无需任何存储权限）
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> uri?.let { vm.exportTo(it) } }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> uri?.let { vm.prepareRestore(it) } }
+
+    LaunchedEffect(Unit) {
+        vm.message.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
 
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { tab = it }
@@ -93,7 +119,17 @@ private fun AppContent(vm: MainViewModel) {
                     title = { Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent
-                    )
+                    ),
+                    actions = {
+                        IconButton(onClick = { showBackupMenu = true }) {
+                            Icon(
+                                AppGlyphs.archive,
+                                contentDescription = "备份与恢复",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 )
             }
         ) { padding ->
@@ -116,7 +152,8 @@ private fun AppContent(vm: MainViewModel) {
                         bottomInset = bottomInset
                     )
                     1 -> RecordsScreen(
-                        transactions = monthTx,
+                        // 流水显示全部记录（含历史月份），否则恢复旧备份后看不到数据
+                        transactions = dashboard.recent,
                         onDelete = { vm.deleteTransaction(it) },
                         onEdit = { vm.updateTransaction(it) },
                         modifier = Modifier.padding(top = topInset),
@@ -141,6 +178,32 @@ private fun AppContent(vm: MainViewModel) {
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp)
+            )
+        }
+
+        if (showBackupMenu) {
+            BackupMenuDialog(
+                totalCount = dashboard.recent.size,
+                onExport = {
+                    showBackupMenu = false
+                    exportLauncher.launch(backupFileName())
+                },
+                onImport = {
+                    showBackupMenu = false
+                    // */* 兼容部分文件管理器把 .json 识别为 octet-stream 的情况
+                    importLauncher.launch(arrayOf("*/*"))
+                },
+                onDismiss = { showBackupMenu = false }
+            )
+        }
+
+        pendingRestore?.let { pending ->
+            RestoreConfirmDialog(
+                count = pending.count,
+                exportedAt = pending.exportedAt,
+                onMerge = { vm.confirmRestore(RestoreMode.MERGE) },
+                onReplace = { vm.confirmRestore(RestoreMode.REPLACE) },
+                onDismiss = { vm.cancelRestore() }
             )
         }
     }

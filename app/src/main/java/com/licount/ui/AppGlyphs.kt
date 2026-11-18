@@ -108,4 +108,20 @@ object AppGlyphs {
             }
         }
     }
+
+    /** 备份与恢复：归档盒（顶栏入口）。 */
+    val archive: ImageVector by lazy {
+        glyph("Archive") {
+            strokePath {
+                box(3f, 4f, 21f, 9.5f, 1.5f)
+                moveTo(4.5f, 9.5f)
+                lineTo(4.5f, 19.5f)
+                quadTo(4.5f, 20.5f, 5.5f, 20.5f)
+                lineTo(18.5f, 20.5f)
+                quadTo(19.5f, 20.5f, 19.5f, 19.5f)
+                lineTo(19.5f, 9.5f)
+                hLine(9.5f, 14.5f, 14.5f)
+            }
+        }
+    }
 }

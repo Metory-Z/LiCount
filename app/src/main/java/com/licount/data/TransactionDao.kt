@@ -2,6 +2,7 @@ package com.licount.data
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +18,17 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /** 一次性取全部记录（备份导出用，不受月份限制）。 */
+    @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
+    suspend fun getAllOnce(): List<Transaction>
+
+    /** 批量插入，主键冲突时跳过；返回每项的 rowId，冲突项为 -1。 */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnoreAll(items: List<Transaction>): List<Long>
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAll()
 
     @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
     fun observeAll(): Flow<List<Transaction>>
