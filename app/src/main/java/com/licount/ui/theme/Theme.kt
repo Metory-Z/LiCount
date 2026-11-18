@@ -101,7 +101,7 @@ private fun seedColorScheme(seed: Long, darkTheme: Boolean): ColorScheme {
 @Composable
 fun rememberIsDarkTheme(): Boolean = LocalDarkTheme.current
 
-/** 轻账主题：FlClash 风格，浅色背景/白色表面，或深色背景/略亮表面。 */
+/** 轻记主题：FlClash 风格，浅色背景/白色表面，或深色背景/略亮表面。 */
 @Composable
 fun LiCountTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

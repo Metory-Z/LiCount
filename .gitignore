@@ -13,3 +13,6 @@ dist/
 *.jks
 *.keystore
 release.keystore
+
+# JVM crash logs
+hs_err_pid*.log
