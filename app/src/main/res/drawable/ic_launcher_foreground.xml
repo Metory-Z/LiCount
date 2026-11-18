@@ -12,38 +12,35 @@
         android:strokeWidth="4"
         android:fillColor="#00000000" />
 
-    <!-- 账本内的三行记录线（缩短，避让右下角徽章） -->
+    <!-- 账本内的三条记录线（加长，仍避开右下角徽章） -->
     <path
-        android:pathData="M38,44 h12"
+        android:pathData="M38,42 h24"
         android:strokeColor="#249B76"
         android:strokeWidth="4"
         android:strokeLineCap="round" />
     <path
-        android:pathData="M38,54 h12"
+        android:pathData="M38,54 h28"
         android:strokeColor="#249B76"
         android:strokeWidth="4"
         android:strokeLineCap="round" />
     <path
-        android:pathData="M38,64 h12"
+        android:pathData="M38,66 h18"
         android:strokeColor="#249B76"
         android:strokeWidth="4"
         android:strokeLineCap="round" />
 
-    <!-- 右下角硬币徽章（实心圆，贴合账本右下角） -->
+    <!-- 右下角小徽章（缩小：r14 → r10） -->
     <path
-        android:pathData="M68,66 m-14,0 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0"
+        android:pathData="M70,70 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0"
         android:fillColor="#249B76" />
 
-    <!-- ¥ 字形：顶部两斜线汇聚 + 竖线 + 横杠 -->
+    <!-- 徽章内一支斜置的白色铅笔（笔身 + 笔尖一体） -->
     <path
-        android:pathData="M61.5,58.5 L68,64.5 M74.5,58.5 L68,64.5 M68,64.5 V73.5"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.6"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:pathData="M73.5,65 L76,67.5 L67.5,75 L64,76.5 L66,73 Z"
+        android:fillColor="#FFFFFF" />
+    <!-- 笔尾橡皮分界线 -->
     <path
-        android:pathData="M64.2,68 H71.8"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.6"
-        android:strokeLineCap="round" />
+        android:pathData="M72.6,65.9 L75.1,68.4"
+        android:strokeColor="#249B76"
+        android:strokeWidth="1" />
 </vector>
