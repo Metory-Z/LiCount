@@ -3,6 +3,7 @@ package com.licount.data
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -10,6 +11,9 @@ interface TransactionDao {
 
     @Insert
     suspend fun insert(tx: Transaction): Long
+
+    @Update
+    suspend fun update(tx: Transaction)
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteById(id: Long)
@@ -28,8 +32,4 @@ interface TransactionDao {
     /** 本月总收入（分）。 */
     @Query("SELECT COALESCE(SUM(-amountFen), 0) FROM transactions WHERE amountFen < 0 AND timestamp >= :start AND timestamp < :end")
     fun observeIncomeSum(start: Long, end: Long): Flow<Long>
-
-    /** 有记录的所有日期（按天，毫秒零点），用于连续打卡计算。 */
-    @Query("SELECT DISTINCT timestamp FROM transactions ORDER BY timestamp DESC")
-    fun observeDistinctDays(): Flow<List<Long>>
 }

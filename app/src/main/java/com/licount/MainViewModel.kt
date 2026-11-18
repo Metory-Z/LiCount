@@ -10,7 +10,6 @@ import com.licount.data.TransactionDao
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -18,8 +17,8 @@ import kotlinx.coroutines.launch
 data class DashboardData(
     val monthExpense: Long = 0,
     val monthIncome: Long = 0,
-    val monthBalance: Long = 0,
-    val streak: Int = 0,
+    /** 今天是否已经有记账记录（未记则在首页提醒）。 */
+    val todayRecorded: Boolean = false,
     val recent: List<Transaction> = emptyList()
 )
 
@@ -34,15 +33,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val dashboard: StateFlow<DashboardData> = combine(
         dao.observeExpenseSum(monthStart, monthEnd),
         dao.observeIncomeSum(monthStart, monthEnd),
-        dao.observeDistinctDays(),
         dao.observeAll()
-    ) { expense, income, days, all ->
-        val daySet = days.map { TimeUtils.dayStart(it) }.toSet()
+    ) { expense, income, all ->
+        val today = TimeUtils.dayStart(System.currentTimeMillis())
         DashboardData(
             monthExpense = expense,
             monthIncome = income,
-            monthBalance = income - expense,
-            streak = TimeUtils.streakDays(daySet),
+            todayRecorded = all.any { TimeUtils.dayStart(it.timestamp) == today },
             recent = all
         )
     }.stateIn(
@@ -51,15 +48,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         DashboardData()
     )
 
-    /** 本月每笔流水（用于统计页分类聚合）。 */
+    /** 本月每笔流水（用于统计页分类聚合与趋势图）。 */
     val monthTransactions = dao.observeBetween(monthStart, monthEnd)
-
-    /** 某分类本月支出合计。 */
-    fun categoryExpenseFlow(category: String) =
-        dao.observeBetween(monthStart, monthEnd).map { list ->
-            list.filter { it.category == category && it.amountFen > 0 }
-                .sumOf { it.amountFen }
-        }
 
     /** 记一笔。amountFen 正数=支出，负数=收入。 */
     fun addTransaction(amountFen: Long, category: String, note: String = "") {
@@ -74,6 +64,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             )
         }
+    }
+
+    /** 修改一笔记录。 */
+    fun updateTransaction(tx: Transaction) {
+        if (tx.amountFen == 0L) return
+        viewModelScope.launch { dao.update(tx) }
     }
 
     fun deleteTransaction(id: Long) {

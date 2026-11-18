@@ -11,8 +11,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.licount.data.Category
@@ -21,19 +23,22 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 首页：上半部分是本月收支仪表盘 + 连续打卡，下半部分是极简快记。
- * 打开即见大金额、点分类、按保存，3 秒记完一笔。
+ * 首页：极简快记。
+ * 单张全宽卡片：本月支出/收入概览 + 今日未记账提醒 + 支出/收入切换 +
+ * 分类快捷选 + 数字键盘，3 秒记完一笔。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     monthExpense: Long,
     monthIncome: Long,
-    monthBalance: Long,
-    streak: Int,
+    todayRecorded: Boolean,
     onSave: (amountFen: Long, category: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp
 ) {
     var amountText by remember { mutableStateOf("") }
+    var isIncome by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf(Category.presets[0].key) }
 
     val amountFen = remember(amountText) {
@@ -46,47 +51,93 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 20.dp)
+            // 底部给悬浮导航栏留位，避免键盘和保存按钮被挡住
+            .padding(
+                top = 4.dp,
+                bottom = bottomInset + 12.dp
+            ),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 仪表盘卡片
-        DashboardCard(contentPadding = DashboardCardPadding) {
+        DashboardCard(
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "本月结余",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    formatMoney(monthBalance),
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (monthBalance >= 0) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.error
+                // 今日未记账提醒
+                if (!todayRecorded) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.errorContainer,
+                                SquircleShape(ControlCorner)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("📌", fontSize = 13.sp)
+                        Text(
+                            "今天还没记账，记一笔吧",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    StatItem("支出", monthExpense, MaterialTheme.colorScheme.error)
-                    StatItem("收入", monthIncome, MaterialTheme.colorScheme.primary)
-                    StatItem("连续打卡", streak.toLong(), MaterialTheme.colorScheme.tertiary, suffix = "天")
                 }
-            }
-        }
 
-        // 记账卡片
-        DashboardCard(contentPadding = DashboardCardPadding) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // 本月支出 / 收入
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        "记一笔",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
+                    Column {
+                        Text(
+                            "本月支出",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            formatMoney(monthExpense),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "本月收入",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            formatMoney(monthIncome),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // 支出 / 收入 切换 + 清空
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 支出
+                    TypeToggle(
+                        label = "支出",
+                        selected = !isIncome,
+                        onClick = { isIncome = false },
+                        modifier = Modifier.weight(1f)
+                    )
+                    // 收入
+                    TypeToggle(
+                        label = "收入",
+                        selected = isIncome,
+                        onClick = { isIncome = true },
+                        modifier = Modifier.weight(1f)
                     )
                     if (amountText.isNotEmpty()) {
                         TextButton(onClick = { amountText = "" }) {
@@ -103,29 +154,34 @@ fun HomeScreen(
                             MaterialTheme.colorScheme.surfaceContainerHigh,
                             SquircleShape(BlockCorner)
                         )
-                        .padding(vertical = 16.dp, horizontal = 20.dp),
+                        .padding(vertical = 12.dp, horizontal = 20.dp),
                     contentAlignment = Alignment.CenterEnd
                 ) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
                             "¥",
-                            fontSize = 24.sp,
+                            fontSize = 22.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             if (amountText.isEmpty()) "0" else amountText,
-                            fontSize = 44.sp,
+                            fontSize = 40.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = if (isIncome) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
                             maxLines = 1
                         )
                     }
                 }
 
-                // 分类快捷选择（一排横向滚动）
-                Row(
+                // 分类快捷选择（两行流式，不再溢出）
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Category.presets.forEach { cat ->
                         CategoryChip(
@@ -142,7 +198,8 @@ fun HomeScreen(
                     onInput = { key -> amountText = handleInput(amountText, key) },
                     onSave = {
                         if (amountFen > 0) {
-                            onSave(amountFen, selectedCategory)
+                            // 收入记为负数，支出为正数
+                            onSave(if (isIncome) -amountFen else amountFen, selectedCategory)
                             amountText = ""
                         }
                     }
@@ -152,25 +209,44 @@ fun HomeScreen(
     }
 }
 
+/** 支出/收入 切换按钮。 */
 @Composable
-private fun StatItem(
+private fun TypeToggle(
     label: String,
-    value: Long,
-    color: androidx.compose.ui.graphics.Color,
-    suffix: String = ""
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column {
-        Text(
-            "$label $suffix",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            formatMoney(value),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = color
-        )
+    val bg by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        label = "type-bg"
+    )
+    val fg by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "type-fg"
+    )
+    PressSurface(
+        onClick = onClick,
+        shape = SquircleShape(ControlCorner),
+        role = Role.RadioButton,
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(bg)
+                .padding(vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                label,
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = fg
+            )
+        }
     }
 }
 
@@ -269,20 +345,20 @@ private fun KeyButton(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(vertical = 14.dp),
+                .padding(vertical = 12.dp),
             contentAlignment = Alignment.Center
         ) {
             if (isDelete) {
                 Icon(
                     Icons.Outlined.Delete,
                     contentDescription = "删除",
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 Text(
                     key,
-                    fontSize = 22.sp,
+                    fontSize = 21.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center

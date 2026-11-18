@@ -110,14 +110,15 @@ private fun AppContent(vm: MainViewModel) {
                     0 -> HomeScreen(
                         monthExpense = dashboard.monthExpense,
                         monthIncome = dashboard.monthIncome,
-                        monthBalance = dashboard.monthBalance,
-                        streak = dashboard.streak,
+                        todayRecorded = dashboard.todayRecorded,
                         onSave = { amount, cat -> vm.addTransaction(amount, cat) },
-                        modifier = Modifier.padding(top = topInset)
+                        modifier = Modifier.padding(top = topInset),
+                        bottomInset = bottomInset
                     )
                     1 -> RecordsScreen(
                         transactions = monthTx,
                         onDelete = { vm.deleteTransaction(it) },
+                        onEdit = { vm.updateTransaction(it) },
                         modifier = Modifier.padding(top = topInset),
                         bottomInset = bottomInset
                     )

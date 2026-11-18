@@ -27,21 +27,4 @@ object TimeUtils {
         cal.set(Calendar.MILLISECOND, 0)
         return cal.timeInMillis
     }
-
-    /**
-     * 计算连续打卡天数。days 是「有记录的天的零点时间戳」集合。
-     * 规则：从今天（或昨天，若今天还没记）往前连续推，断一天即止。
-     */
-    fun streakDays(days: Set<Long>, now: Long = System.currentTimeMillis()): Int {
-        if (days.isEmpty()) return 0
-        val today = dayStart(now)
-        // 今天没记，从昨天开始算；今天记了，从今天开始
-        var cursor = if (days.contains(today)) today else today - 86_400_000L
-        var streak = 0
-        while (days.contains(cursor)) {
-            streak++
-            cursor -= 86_400_000L
-        }
-        return streak
-    }
 }

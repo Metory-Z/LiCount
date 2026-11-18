@@ -2,7 +2,7 @@ package com.licount.data
 
 /**
  * 预置消费分类。emoji 用作分类图标，零资源、开箱即用。
- * 颜色用主题语义外的固定色相，保证各分类一眼可辨。
+ * 收入不是分类，而是独立的「收支类型」，由记账页的 支出/收入 切换控制。
  */
 data class Category(
     val key: String,
@@ -15,12 +15,12 @@ data class Category(
             Category("food", "餐饮", "🍜"),
             Category("transport", "交通", "🚇"),
             Category("shopping", "购物", "🛍️"),
-            Category("entertainment", "娱乐", "🎮"),
+            Category("entertainment", "娱乐", "🎬"),
             Category("housing", "居住", "🏠"),
             Category("medical", "医疗", "💊"),
             Category("education", "学习", "📚"),
-            Category("other", "其他", "📦"),
-            Category("income", "收入", "💰")
+            Category("fund", "基金", "📈"),
+            Category("other", "其他", "📦")
         )
 
         fun byKey(key: String): Category =
