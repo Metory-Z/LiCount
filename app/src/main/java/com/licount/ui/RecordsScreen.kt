@@ -1,6 +1,7 @@
 package com.licount.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -100,25 +101,27 @@ fun RecordsScreen(
 
 /**
  * 日期分隔胶囊，居中显示，例如「11.19」。
- * 用主题主色实心填充：原先的 surfaceContainerHigh 与页面背景亮度只差 0.015，
- * 在浅色主题下几乎完全融进背景，换成主色后分组界限才真正立得住。
+ * 三档对比取中间：surfaceContainerHigh 与页面背景只差 0.015（隐形），
+ * 主色实心又过于抢眼。最终用「表面色填充 + 细描边 + 深色字」的小型胶囊，
+ * 靠边界而非色块来分组，不会把视线从记录上吸走。
  */
 @Composable
 private fun DatePill(label: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 2.dp),
+            .padding(top = 6.dp, bottom = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             label,
             modifier = Modifier
-                .background(MaterialTheme.colorScheme.primary, SquircleCapsule)
-                .padding(horizontal = 20.dp, vertical = 7.dp),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimary
+                .background(MaterialTheme.colorScheme.surface, SquircleCapsule)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, SquircleCapsule)
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

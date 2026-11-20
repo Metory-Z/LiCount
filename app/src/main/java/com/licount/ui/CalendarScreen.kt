@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,12 +90,13 @@ fun CalendarScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = 16.dp)
             .padding(top = 8.dp, bottom = bottomInset + 12.dp)
     ) {
         // 月份头、星期、网格、当月合计装进同一张卡，元素不再散落在近背景色上
+        // 左右留白收紧到 16 / 10dp，把宽度尽量让给 7 列格子，避免金额被裁
         DashboardCard(
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 16.dp),
             modifier = Modifier.fillMaxWidth(),
             radius = BlockCorner
         ) {
@@ -153,7 +155,7 @@ fun CalendarScreen(
                             for (dow in 0..6) {
                                 val day = week * 7 + dow - leadingBlanks + 1
                                 if (day !in 1..daysInMonth) {
-                                    Spacer(Modifier.weight(1f).height(52.dp))
+                                    Spacer(Modifier.weight(1f).height(54.dp))
                                 } else {
                                     DayCell(
                                         day = day,
@@ -173,33 +175,50 @@ fun CalendarScreen(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
 
-                // 当月合计
+                // 当月合计：两列各占一半，金额按长度自动降字号，长数字不会被拦腰裁掉
+                val expenseText = formatMoney(monthExpense)
+                val incomeText = formatMoney(monthIncome)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             "当月支出",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            formatMoney(monthExpense),
-                            fontSize = 17.sp,
+                            expenseText,
+                            fontSize = when {
+                                expenseText.length >= 11 -> 12.sp
+                                expenseText.length >= 9 -> 14.sp
+                                else -> 16.sp
+                            },
+                            maxLines = 1,
+                            softWrap = false,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
                         Text(
                             "当月收入",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            formatMoney(monthIncome),
-                            fontSize = 17.sp,
+                            incomeText,
+                            fontSize = when {
+                                incomeText.length >= 11 -> 12.sp
+                                incomeText.length >= 9 -> 14.sp
+                                else -> 16.sp
+                            },
+                            maxLines = 1,
+                            softWrap = false,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -303,8 +322,8 @@ private fun RowScope.DayCell(
     Box(
         modifier = Modifier
             .weight(1f)
-            .height(52.dp)
-            .padding(horizontal = 2.dp)
+            .height(54.dp)
+            .padding(horizontal = 1.dp)
     ) {
         Column(
             modifier = Modifier
@@ -324,7 +343,7 @@ private fun RowScope.DayCell(
         ) {
             Box(
                 modifier = Modifier
-                    .size(22.dp)
+                    .size(24.dp)
                     .background(
                         if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
                         SquircleCapsule
@@ -334,6 +353,8 @@ private fun RowScope.DayCell(
                 Text(
                     "$day",
                     fontSize = 12.sp,
+                    maxLines = 1,
+                    softWrap = false,
                     fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (isToday) {
                         MaterialTheme.colorScheme.onPrimary
@@ -343,22 +364,21 @@ private fun RowScope.DayCell(
                 )
             }
             Spacer(Modifier.height(2.dp))
-            // 无记录时也保留这一行的高度，日期才能对齐
-            Box(modifier = Modifier.height(14.dp), contentAlignment = Alignment.Center) {
+            // 无记录时也保留这一行的高度，日期才能对齐；金额行占满格宽并自动缩放
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 when {
-                    expense > 0 -> Text(
+                    expense > 0 -> DayAmount(
                         "-${shortMoney(expense)}",
-                        fontSize = 9.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        color = MaterialTheme.colorScheme.error
+                        MaterialTheme.colorScheme.error
                     )
-                    income > 0 -> Text(
+                    income > 0 -> DayAmount(
                         "+${shortMoney(income)}",
-                        fontSize = 9.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        color = MaterialTheme.colorScheme.primary
+                        MaterialTheme.colorScheme.primary
                     )
                 }
             }
@@ -366,13 +386,41 @@ private fun RowScope.DayCell(
     }
 }
 
-/** 日历格子里空间有限，大金额用万 / k 缩写。 */
+/**
+ * 日历格子里空间有限，用整数 + 万 / k 缩写保证完整显示；
+ * 精确金额在点开当天明细里看。最长形如「-99万 / -99k / -12.5」。
+ */
 private fun shortMoney(fen: Long): String {
     val yuan = fen / 100.0
     return when {
-        yuan >= 10000 -> String.format(Locale.US, "%.1f万", yuan / 10000)
-        yuan >= 1000 -> String.format(Locale.US, "%.1fk", yuan / 1000)
+        yuan >= 10000 -> String.format(Locale.US, "%.0f万", yuan / 10000)
+        yuan >= 1000 -> String.format(Locale.US, "%.0fk", yuan / 1000)
+        yuan >= 100 -> String.format(Locale.US, "%.0f", yuan)
         yuan % 1.0 == 0.0 -> String.format(Locale.US, "%.0f", yuan)
         else -> String.format(Locale.US, "%.1f", yuan)
     }
+}
+
+/**
+ * 格子金额：先按 9sp 排版，一旦检测到横向溢出就自动降字号（最低 7sp），
+ * 保证数字完整显示，而不是被格子裁掉半截。
+ */
+@Composable
+private fun DayAmount(text: String, color: Color) {
+    var fontSize by remember(text) { mutableStateOf(9.sp) }
+    Text(
+        text = text,
+        color = color,
+        fontSize = fontSize,
+        maxLines = 1,
+        softWrap = false,
+        textAlign = TextAlign.Center,
+        overflow = TextOverflow.Clip,
+        modifier = Modifier.fillMaxWidth(),
+        onTextLayout = { result ->
+            if (result.didOverflowWidth && fontSize.value > 7f) {
+                fontSize = (fontSize.value - 0.5f).sp
+            }
+        }
+    )
 }
