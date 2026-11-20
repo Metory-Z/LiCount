@@ -1,6 +1,7 @@
 package com.licount.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -24,9 +25,10 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * 日历页：月历网格，每格显示当天支出（无支出但有收入时显示收入）。
- * 可切换月份；点击某天弹出当天明细，明细沿用流水页的记录卡片与编辑/删除能力。
+ * 日历页：整块卡片内的月历网格，每格显示当天支出（无支出但有收入时显示收入）。
+ * 可切换月份；点击某天用全宽底部弹层展示当天明细，明细沿用流水页的记录卡片与编辑/删除能力。
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     transactions: List<Transaction>,
@@ -88,159 +90,183 @@ fun CalendarScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
-            .padding(top = 8.dp, bottom = bottomInset + 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(top = 8.dp, bottom = bottomInset + 12.dp)
     ) {
-        // 月份切换
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = { shiftMonth(-1) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "上个月")
-            }
-            Text(
-                "${year}年${month + 1}月",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            IconButton(onClick = { shiftMonth(1) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "下个月")
-            }
-        }
-
-        // 星期标题
-        Row(modifier = Modifier.fillMaxWidth()) {
-            listOf("日", "一", "二", "三", "四", "五", "六").forEach { label ->
-                Text(
-                    label,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        // 月历网格
-        for (week in 0 until weekCount) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                for (dow in 0..6) {
-                    val day = week * 7 + dow - leadingBlanks + 1
-                    if (day !in 1..daysInMonth) {
-                        Spacer(Modifier.weight(1f).height(52.dp))
-                    } else {
-                        DayCell(
-                            day = day,
-                            txs = byDay[day].orEmpty(),
-                            isToday = isCurrentMonth && day == today,
-                            isSelected = selectedDay == day,
-                            onClick = { selectedDay = day }
-                        )
-                    }
-                }
-            }
-        }
-
-        // 当月合计
+        // 月份头、星期、网格、当月合计装进同一张卡，元素不再散落在近背景色上
         DashboardCard(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 16.dp),
             modifier = Modifier.fillMaxWidth(),
             radius = BlockCorner
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // 标题居中，箭头紧挨标题，而不是被 SpaceBetween 顶到屏幕两端
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    IconButton(onClick = { shiftMonth(-1) }, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "上个月",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     Text(
-                        "当月支出",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "${year}年${month + 1}月",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 20.dp)
                     )
-                    Text(
-                        formatMoney(monthExpense),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    IconButton(onClick = { shiftMonth(1) }, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "下个月",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        "当月收入",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        formatMoney(monthIncome),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+
+                // 星期标题：周末用主色淡字区分
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    listOf("日", "一", "二", "三", "四", "五", "六").forEachIndexed { i, label ->
+                        val weekend = i == 0 || i == 6
+                        Text(
+                            label,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                            fontSize = 11.sp,
+                            fontWeight = if (weekend) FontWeight.Medium else FontWeight.Normal,
+                            color = if (weekend) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
+
+                // 网格：行距收紧到 2dp，格子高度一致，日期统一在同一水平线上
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    for (week in 0 until weekCount) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            for (dow in 0..6) {
+                                val day = week * 7 + dow - leadingBlanks + 1
+                                if (day !in 1..daysInMonth) {
+                                    Spacer(Modifier.weight(1f).height(52.dp))
+                                } else {
+                                    DayCell(
+                                        day = day,
+                                        txs = byDay[day].orEmpty(),
+                                        isToday = isCurrentMonth && day == today,
+                                        isSelected = selectedDay == day,
+                                        onClick = { selectedDay = day }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+
+                // 当月合计
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            "当月支出",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            formatMoney(monthExpense),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            "当月收入",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            formatMoney(monthIncome),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }
     }
 
-    // 某天明细
+    // 某天明细：全宽底部弹层，记录卡片不再被塞进窄对话框里挤压变形
     if (selectedDay > 0) {
         val dayTxs = byDay[selectedDay].orEmpty()
         val dayExpense = dayTxs.filter { it.amountFen > 0 }.sumOf { it.amountFen }
         val dayIncome = dayTxs.filter { it.amountFen < 0 }.sumOf { -it.amountFen }
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { selectedDay = 0 },
-            title = {
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Text(
                     "${month + 1}月${selectedDay}日 · ${dayTxs.size} 笔",
-                    fontSize = 17.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-            },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            "支出 ${formatMoney(dayExpense)}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.error
+                    Text(
+                        "支出 ${formatMoney(dayExpense)}",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "收入 ${formatMoney(dayIncome)}",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (dayTxs.isEmpty()) {
+                    Text(
+                        "这天没有记录",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    dayTxs.forEach { tx ->
+                        RecordRow(
+                            tx = tx,
+                            onClick = {
+                                selectedDay = 0
+                                editing = tx
+                            },
+                            onDelete = { onDelete(tx.id) }
                         )
-                        Text(
-                            "收入 ${formatMoney(dayIncome)}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    if (dayTxs.isEmpty()) {
-                        Text(
-                            "这天没有记录",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        dayTxs.forEach { tx ->
-                            RecordRow(
-                                tx = tx,
-                                onClick = {
-                                    selectedDay = 0
-                                    editing = tx
-                                },
-                                onDelete = { onDelete(tx.id) }
-                            )
-                        }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { selectedDay = 0 }) { Text("关闭") }
             }
-        )
+        }
     }
 
     editing?.let { tx ->
@@ -256,7 +282,7 @@ fun CalendarScreen(
     }
 }
 
-/** 月历里的单个日期格。 */
+/** 月历里的单个日期格。内容高度固定，保证有/无金额的格子日期不会上下跳动。 */
 @Composable
 private fun RowScope.DayCell(
     day: Int,
@@ -267,56 +293,75 @@ private fun RowScope.DayCell(
 ) {
     val expense = txs.filter { it.amountFen > 0 }.sumOf { it.amountFen }
     val income = txs.filter { it.amountFen < 0 }.sumOf { -it.amountFen }
+    val shape = SquircleShape(ControlCorner)
     val bg = when {
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         txs.isNotEmpty() -> MaterialTheme.colorScheme.surfaceContainerHigh
         else -> Color.Transparent
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .weight(1f)
             .height(52.dp)
-            .clip(SquircleShape(ControlCorner))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = 2.dp)
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .size(20.dp)
-                .background(
-                    if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
-                    SquircleCapsule
-                ),
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
+                .clip(shape)
+                .background(bg)
+                .then(
+                    if (isSelected) {
+                        Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, shape)
+                    } else {
+                        Modifier
+                    }
+                )
+                .clickable(onClick = onClick),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                "$day",
-                fontSize = 11.sp,
-                fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (isToday) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .background(
+                        if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        SquircleCapsule
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "$day",
+                    fontSize = 12.sp,
+                    fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isToday) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            // 无记录时也保留这一行的高度，日期才能对齐
+            Box(modifier = Modifier.height(14.dp), contentAlignment = Alignment.Center) {
+                when {
+                    expense > 0 -> Text(
+                        "-${shortMoney(expense)}",
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    income > 0 -> Text(
+                        "+${shortMoney(income)}",
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-            )
-        }
-        when {
-            expense > 0 -> Text(
-                "-${shortMoney(expense)}",
-                fontSize = 9.sp,
-                maxLines = 1,
-                color = MaterialTheme.colorScheme.error
-            )
-            income > 0 -> Text(
-                "+${shortMoney(income)}",
-                fontSize = 9.sp,
-                maxLines = 1,
-                color = MaterialTheme.colorScheme.primary
-            )
+            }
         }
     }
 }

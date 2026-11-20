@@ -98,26 +98,27 @@ fun RecordsScreen(
     }
 }
 
-/** 日期分隔胶囊，居中显示，例如「11.19」。 */
+/**
+ * 日期分隔胶囊，居中显示，例如「11.19」。
+ * 用主题主色实心填充：原先的 surfaceContainerHigh 与页面背景亮度只差 0.015，
+ * 在浅色主题下几乎完全融进背景，换成主色后分组界限才真正立得住。
+ */
 @Composable
 private fun DatePill(label: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 2.dp),
+            .padding(top = 8.dp, bottom = 2.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             label,
             modifier = Modifier
-                .background(
-                    MaterialTheme.colorScheme.surfaceContainerHigh,
-                    SquircleCapsule
-                )
-                .padding(horizontal = 16.dp, vertical = 5.dp),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+                .background(MaterialTheme.colorScheme.primary, SquircleCapsule)
+                .padding(horizontal = 20.dp, vertical = 7.dp),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary
         )
     }
 }
