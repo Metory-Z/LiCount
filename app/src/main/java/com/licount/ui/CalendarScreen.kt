@@ -15,9 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,13 +95,13 @@ fun CalendarScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 14.dp)
             .padding(top = 8.dp, bottom = bottomInset + 12.dp)
     ) {
         // 月份头、星期、网格、当月合计装进同一张卡，元素不再散落在近背景色上
         // 左右留白收紧到 16 / 10dp，把宽度尽量让给 7 列格子，避免金额被裁
         DashboardCard(
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
             modifier = Modifier.fillMaxWidth(),
             radius = BlockCorner
         ) {
@@ -148,22 +153,28 @@ fun CalendarScreen(
                     }
                 }
 
-                // 网格：行距收紧到 2dp，格子高度一致，日期统一在同一水平线上
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    for (week in 0 until weekCount) {
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            for (dow in 0..6) {
-                                val day = week * 7 + dow - leadingBlanks + 1
-                                if (day !in 1..daysInMonth) {
-                                    Spacer(Modifier.weight(1f).height(54.dp))
-                                } else {
-                                    DayCell(
-                                        day = day,
-                                        txs = byDay[day].orEmpty(),
-                                        isToday = isCurrentMonth && day == today,
-                                        isSelected = selectedDay == day,
-                                        onClick = { selectedDay = day }
-                                    )
+                // 网格：行距收紧到 2dp，格子高度一致，日期统一在同一水平线上。
+                // 这里固定 fontScale = 1：格子尺寸是 dp，若让 sp 跟随系统字体缩放，
+                // 大字体下文字会放大而格子不变，金额必然溢出被裁。
+                val baseDensity = LocalDensity.current
+                val gridDensity = remember(baseDensity) { Density(baseDensity.density, 1f) }
+                CompositionLocalProvider(LocalDensity provides gridDensity) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        for (week in 0 until weekCount) {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                for (dow in 0..6) {
+                                    val day = week * 7 + dow - leadingBlanks + 1
+                                    if (day !in 1..daysInMonth) {
+                                        Spacer(Modifier.weight(1f).height(58.dp))
+                                    } else {
+                                        DayCell(
+                                            day = day,
+                                            txs = byDay[day].orEmpty(),
+                                            isToday = isCurrentMonth && day == today,
+                                            isSelected = selectedDay == day,
+                                            onClick = { selectedDay = day }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -252,17 +263,24 @@ fun CalendarScreen(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         "支出 ${formatMoney(dayExpense)}",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.error
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
                     )
                     Text(
                         "收入 ${formatMoney(dayIncome)}",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.primary
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        textAlign = TextAlign.End,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
                     )
                 }
                 if (dayTxs.isEmpty()) {
@@ -312,7 +330,8 @@ private fun RowScope.DayCell(
 ) {
     val expense = txs.filter { it.amountFen > 0 }.sumOf { it.amountFen }
     val income = txs.filter { it.amountFen < 0 }.sumOf { -it.amountFen }
-    val shape = SquircleShape(ControlCorner)
+    // 44x58dp 的小格子不能用 14dp 大圆角：底部圆角区正好压在金额行上，会把文字两端裁掉
+    val shape = SquircleShape(8.dp)
     val bg = when {
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         txs.isNotEmpty() -> MaterialTheme.colorScheme.surfaceContainerHigh
@@ -322,8 +341,8 @@ private fun RowScope.DayCell(
     Box(
         modifier = Modifier
             .weight(1f)
-            .height(54.dp)
-            .padding(horizontal = 1.dp)
+            .height(58.dp)
+            .padding(horizontal = 0.5.dp)
     ) {
         Column(
             modifier = Modifier
@@ -355,6 +374,14 @@ private fun RowScope.DayCell(
                     fontSize = 12.sp,
                     maxLines = 1,
                     softWrap = false,
+                    style = TextStyle(
+                        lineHeight = 14.sp,
+                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        lineHeightStyle = LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.Both
+                        )
+                    ),
                     fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (isToday) {
                         MaterialTheme.colorScheme.onPrimary
@@ -364,11 +391,13 @@ private fun RowScope.DayCell(
                 )
             }
             Spacer(Modifier.height(2.dp))
-            // 无记录时也保留这一行的高度，日期才能对齐；金额行占满格宽并自动缩放
+            // 金额行只给最小高度、不写死高度：写死 14dp 时中文「万」或稍大的字体
+            // 行高会超过它，溢出部分和上方日期圆叠在一起，看起来像被遮挡。
+            // min 高度同时保证「无记录」的格子日期位置仍然对齐。
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(14.dp),
+                    .heightIn(min = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 when {
@@ -416,6 +445,13 @@ private fun DayAmount(text: String, color: Color) {
         softWrap = false,
         textAlign = TextAlign.Center,
         overflow = TextOverflow.Clip,
+        style = TextStyle(
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+            lineHeightStyle = LineHeightStyle(
+                alignment = LineHeightStyle.Alignment.Center,
+                trim = LineHeightStyle.Trim.Both
+            )
+        ),
         modifier = Modifier.fillMaxWidth(),
         onTextLayout = { result ->
             if (result.didOverflowWidth && fontSize.value > 7f) {

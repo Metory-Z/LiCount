@@ -68,9 +68,18 @@ fun RecordRow(tx: Transaction, onClick: () -> Unit, onDelete: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            val amountText =
+                (if (isExpense) "-" else "+") + formatMoney(kotlin.math.abs(tx.amountFen))
             Text(
-                (if (isExpense) "-" else "+") + formatMoney(kotlin.math.abs(tx.amountFen)),
-                fontSize = 17.sp,
+                amountText,
+                // 超长金额自动降字号，避免在明细弹层里被分类列挤出屏幕
+                fontSize = when {
+                    amountText.length >= 11 -> 12.sp
+                    amountText.length >= 9 -> 14.sp
+                    else -> 17.sp
+                },
+                maxLines = 1,
+                softWrap = false,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isExpense) {
                     MaterialTheme.colorScheme.error
