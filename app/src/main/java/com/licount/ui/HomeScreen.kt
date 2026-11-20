@@ -63,7 +63,8 @@ fun HomeScreen(
     ) {
         // 可用高度偏小时整体降一档：优先保证键盘与保存完整可见
         val compact = maxHeight < 600.dp
-        val outerGap = if (compact) 6.dp else 10.dp
+        // 两张卡片之间的间距要大于卡内间距，形成 16 > 12 > 8 > 6 的层级
+        val outerGap = if (compact) 10.dp else 16.dp
         // 卡内间距适度加大，把原本堆在金额上方的大片空白匀给控件之间
         val innerGap = if (compact) 8.dp else 12.dp
         val cardPadding = if (compact) 10.dp else 12.dp

@@ -145,6 +145,31 @@ private fun Legend(label: String, color: Color) {
     }
 }
 
+/**
+ * Y 轴刻度：以 P90 分位数作为「正常日」的尺度。
+ * 原来直接取全局最大值，只要某天有一笔大额收支，其余所有天的曲线就被压成贴着基线的一条直线。
+ * 现在离群的大额不参与决定刻度，只在图里置顶并标记，正常波动依然占满图表高度。
+ */
+private data class ChartScale(val ceiling: Long, val maxValue: Long)
+
+private fun computeChartScale(expense: List<Long>, income: List<Long>): ChartScale {
+    val positive = (expense + income).filter { it > 0 }.sorted()
+    if (positive.isEmpty()) return ChartScale(1L, 0L)
+    val max = positive.last()
+    // 有效样本太少时 P90 不可靠，退回全局最大值并留 5% 顶部余量
+    if (positive.size < 5) {
+        return ChartScale((max * 105 / 100).coerceAtLeast(1L), max)
+    }
+    val p90 = positive[((positive.size - 1) * 0.9f).toInt()]
+    val normal = (p90 * 5 / 4).coerceAtLeast(1L)
+    // 只有最大值明显超出正常尺度（1.5 倍）才削顶，避免正常波动被误判
+    return if (max > normal * 3 / 2) {
+        ChartScale(normal, max)
+    } else {
+        ChartScale((max * 105 / 100).coerceAtLeast(1L), max)
+    }
+}
+
 /** 每日收支双线趋势图（线 + 半透明填充 + 日期刻度，仿 FlClash 上下行流量图）。 */
 @Composable
 private fun TrendChart(
@@ -154,11 +179,15 @@ private fun TrendChart(
     incomeColor: Color,
     gridColor: Color
 ) {
-    val maxValue = remember(expense, income) {
-        (expense.maxOrNull() ?: 0L).coerceAtLeast(income.maxOrNull() ?: 0L).coerceAtLeast(1L)
-    }
+    val scale = remember(expense, income) { computeChartScale(expense, income) }
     val chartHeight = 130.dp
     val dayCount = expense.size
+    val outlierDays = remember(expense, income, scale) {
+        (0 until dayCount).count { i ->
+            (expense.getOrNull(i) ?: 0L) > scale.ceiling ||
+                (income.getOrNull(i) ?: 0L) > scale.ceiling
+        }
+    }
     // 最多 5 个刻度，等距分布，首尾正好是 1 日和本月最后一天
     val tickDays = remember(dayCount) {
         if (dayCount <= 1) listOf(1)
@@ -174,7 +203,8 @@ private fun TrendChart(
         ) {
             val w = size.width
             val h = size.height
-            val topPad = 6f
+            // 顶部留出放「削顶」三角标记的空间
+            val topPad = 12f
             val usable = h - topPad - 4f
             val stepX = if (dayCount <= 1) 0f else w / (dayCount - 1)
 
@@ -199,7 +229,9 @@ private fun TrendChart(
 
             fun point(index: Int, value: Long): Offset {
                 val x = if (dayCount <= 1) w / 2f else index * stepX
-                val y = h - 4f - (value.toFloat() / maxValue) * usable
+                // 超出刻度的数值钳到顶端，其余日子仍按正常刻度分布
+                val shown = value.coerceAtMost(scale.ceiling)
+                val y = h - 4f - (shown.toFloat() / scale.ceiling) * usable
                 return Offset(x, y)
             }
 
@@ -221,12 +253,38 @@ private fun TrendChart(
                 drawPath(path, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
                 // 有记录的日期打一个小圆点，方便把线对应到具体某天
                 values.forEachIndexed { i, v ->
-                    if (v > 0) drawCircle(color, radius = 2.dp.toPx(), center = point(i, v))
+                    if (v > 0 && v <= scale.ceiling) {
+                        drawCircle(color, radius = 2.dp.toPx(), center = point(i, v))
+                    }
+                }
+                // 超出刻度的日子在顶点画小三角，明确表示这里被「削顶」了
+                values.forEachIndexed { i, v ->
+                    if (v > scale.ceiling) {
+                        val p = point(i, v)
+                        val r = 4.dp.toPx()
+                        val triangle = Path().apply {
+                            moveTo(p.x, p.y - r)
+                            lineTo(p.x - r * 0.85f, p.y + r * 0.6f)
+                            lineTo(p.x + r * 0.85f, p.y + r * 0.6f)
+                            close()
+                        }
+                        drawPath(triangle, color)
+                    }
                 }
             }
 
             drawSeries(expense, expenseColor)
             drawSeries(income, incomeColor)
+        }
+
+        // 明确告知刻度被压缩过，否则会误以为那天金额只有顶端那么高
+        if (outlierDays > 0) {
+            Text(
+                "▲ 有 $outlierDays 天超出刻度，最高 ¥${formatMoney(scale.maxValue)}",
+                fontSize = 10.sp,
+                color = labelColor,
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
 
         Row(
