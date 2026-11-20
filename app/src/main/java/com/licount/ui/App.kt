@@ -48,7 +48,7 @@ import kotlin.math.min
 private fun backupFileName(): String =
     "LiCount-backup-${SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())}.json"
 
-private val PAGE_TITLES = listOf("记账", "流水", "统计")
+private val PAGE_TITLES = listOf("记账", "流水", "统计", "日历")
 
 private val NavLabelStyle = TextStyle(
     lineHeight = 12.sp,
@@ -89,6 +89,11 @@ private fun AppContent(vm: MainViewModel) {
     val dashboard by vm.dashboard.collectAsState()
     val monthTx by vm.monthTransactions.collectAsState(initial = emptyList())
     val pendingRestore by vm.pendingRestore.collectAsState()
+
+    // 各分类累计使用次数，用于首页与编辑弹窗的「常用优先」排序
+    val categoryCounts = remember(dashboard.recent) {
+        dashboard.recent.groupingBy { it.category }.eachCount()
+    }
 
     // 系统文件选择器：导出用 CreateDocument，导入用 OpenDocument（无需任何存储权限）
     val exportLauncher = rememberLauncherForActivityResult(
@@ -148,12 +153,14 @@ private fun AppContent(vm: MainViewModel) {
                         monthIncome = dashboard.monthIncome,
                         todayRecorded = dashboard.todayRecorded,
                         onSave = { amount, cat -> vm.addTransaction(amount, cat) },
+                        categoryCounts = categoryCounts,
                         modifier = Modifier.padding(top = topInset),
                         bottomInset = bottomInset
                     )
                     1 -> RecordsScreen(
                         // 流水显示全部记录（含历史月份），否则恢复旧备份后看不到数据
                         transactions = dashboard.recent,
+                        categoryCounts = categoryCounts,
                         onDelete = { vm.deleteTransaction(it) },
                         onEdit = { vm.updateTransaction(it) },
                         modifier = Modifier.padding(top = topInset),
@@ -161,6 +168,14 @@ private fun AppContent(vm: MainViewModel) {
                     )
                     2 -> StatsScreen(
                         transactions = monthTx,
+                        modifier = Modifier.padding(top = topInset),
+                        bottomInset = bottomInset
+                    )
+                    3 -> CalendarScreen(
+                        transactions = dashboard.recent,
+                        categoryCounts = categoryCounts,
+                        onDelete = { vm.deleteTransaction(it) },
+                        onEdit = { vm.updateTransaction(it) },
                         modifier = Modifier.padding(top = topInset),
                         bottomInset = bottomInset
                     )
@@ -216,9 +231,10 @@ private fun FloatingNavigation(
     onSelect: (Int) -> Unit,
     modifier: Modifier
 ) {
-    val icons = listOf(AppGlyphs.home, AppGlyphs.records, AppGlyphs.stats)
+    val icons = listOf(AppGlyphs.home, AppGlyphs.records, AppGlyphs.stats, AppGlyphs.calendar)
     val labels = PAGE_TITLES
-    val itemWidth = 84.dp
+    // 四个 tab 时收窄单项，避免药丸在窄屏贴边
+    val itemWidth = 76.dp
     val itemHeight = 54.dp
     val gap = 4.dp
     val pad = 6.dp

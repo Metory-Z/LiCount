@@ -36,12 +36,17 @@ fun HomeScreen(
     monthIncome: Long,
     todayRecorded: Boolean,
     onSave: (amountFen: Long, category: String) -> Unit,
+    categoryCounts: Map<String, Int> = emptyMap(),
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp
 ) {
+    // 使用次数多的分类排前面；次数相同（含 0 次）保持预设顺序
+    val orderedCategories = remember(categoryCounts) {
+        Category.presets.sortedByDescending { categoryCounts[it.key] ?: 0 }
+    }
     var amountText by remember { mutableStateOf("") }
     var isIncome by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf(Category.presets[0].key) }
+    var selectedCategory by remember { mutableStateOf(orderedCategories.first().key) }
 
     val amountFen = remember(amountText) {
         // 输入的是「元」，转成分；最多两位小数
@@ -216,7 +221,7 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Category.presets.forEach { cat ->
+                        orderedCategories.forEach { cat ->
                             CategoryChip(
                                 category = cat,
                                 selected = selectedCategory == cat.key,

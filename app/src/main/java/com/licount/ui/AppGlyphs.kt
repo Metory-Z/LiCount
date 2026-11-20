@@ -59,7 +59,7 @@ private fun PathBuilder.hLine(x1: Float, x2: Float, y: Float) {
     lineTo(x2, y)
 }
 
-/** 底栏图标。三个 tab：首页(记账)、流水、统计。 */
+/** 底栏图标。四个 tab：首页(记账)、流水、统计、日历。 */
 object AppGlyphs {
 
     /** 首页：房子（账本归家）。 */
@@ -105,6 +105,20 @@ object AppGlyphs {
                 lineTo(12f, 8f)
                 moveTo(17f, 20f)
                 lineTo(17f, 11f)
+            }
+        }
+    }
+
+    /** 日历：带装订环的月历框。 */
+    val calendar: ImageVector by lazy {
+        glyph("Calendar") {
+            strokePath {
+                box(3.5f, 5f, 20.5f, 20f, 2f)
+                hLine(4f, 20f, 9.5f)
+                moveTo(8f, 3f)
+                lineTo(8f, 6.5f)
+                moveTo(16f, 3f)
+                lineTo(16f, 6.5f)
             }
         }
     }

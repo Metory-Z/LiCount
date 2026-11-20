@@ -145,7 +145,7 @@ private fun Legend(label: String, color: Color) {
     }
 }
 
-/** 每日收支双线趋势图（线 + 半透明填充，仿 FlClash 上下行流量图）。 */
+/** 每日收支双线趋势图（线 + 半透明填充 + 日期刻度，仿 FlClash 上下行流量图）。 */
 @Composable
 private fun TrendChart(
     expense: List<Long>,
@@ -158,53 +158,87 @@ private fun TrendChart(
         (expense.maxOrNull() ?: 0L).coerceAtLeast(income.maxOrNull() ?: 0L).coerceAtLeast(1L)
     }
     val chartHeight = 130.dp
+    val dayCount = expense.size
+    // 最多 5 个刻度，等距分布，首尾正好是 1 日和本月最后一天
+    val tickDays = remember(dayCount) {
+        if (dayCount <= 1) listOf(1)
+        else (0..4).map { 1 + it * (dayCount - 1) / 4 }.distinct()
+    }
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    Canvas(
-        Modifier
-            .fillMaxWidth()
-            .height(chartHeight)
-    ) {
-        val w = size.width
-        val h = size.height
-        val topPad = 6f
-        val usable = h - topPad - 4f
+    Column {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(chartHeight)
+        ) {
+            val w = size.width
+            val h = size.height
+            val topPad = 6f
+            val usable = h - topPad - 4f
+            val stepX = if (dayCount <= 1) 0f else w / (dayCount - 1)
 
-        // 基线网格
-        drawLine(
-            color = gridColor,
-            start = Offset(0f, h - 4f),
-            end = Offset(w, h - 4f),
-            strokeWidth = 1.5f
-        )
-
-        fun buildPath(values: List<Long>): Path? {
-            if (values.isEmpty()) return null
-            val path = Path()
-            val stepX = if (values.size == 1) 0f else w / (values.size - 1)
-            values.forEachIndexed { i, v ->
-                val x = if (values.size == 1) w / 2f else i * stepX
-                val y = h - 4f - (v.toFloat() / maxValue) * usable
-                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            // 日期刻度竖线，与下方标签一一对应
+            tickDays.forEach { day ->
+                val x = if (dayCount <= 1) w / 2f else (day - 1) * stepX
+                drawLine(
+                    color = gridColor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, h - 4f),
+                    strokeWidth = 1f
+                )
             }
-            return path
+
+            // 基线
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, h - 4f),
+                end = Offset(w, h - 4f),
+                strokeWidth = 1.5f
+            )
+
+            fun point(index: Int, value: Long): Offset {
+                val x = if (dayCount <= 1) w / 2f else index * stepX
+                val y = h - 4f - (value.toFloat() / maxValue) * usable
+                return Offset(x, y)
+            }
+
+            fun drawSeries(values: List<Long>, color: Color) {
+                if (values.isEmpty()) return
+                val path = Path()
+                values.forEachIndexed { i, v ->
+                    val p = point(i, v)
+                    if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+                }
+                // 半透明面积填充
+                val fill = Path().apply {
+                    addPath(path)
+                    lineTo(w, h - 4f)
+                    lineTo(0f, h - 4f)
+                    close()
+                }
+                drawPath(fill, color.copy(alpha = 0.12f))
+                drawPath(path, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                // 有记录的日期打一个小圆点，方便把线对应到具体某天
+                values.forEachIndexed { i, v ->
+                    if (v > 0) drawCircle(color, radius = 2.dp.toPx(), center = point(i, v))
+                }
+            }
+
+            drawSeries(expense, expenseColor)
+            drawSeries(income, incomeColor)
         }
 
-        fun drawSeries(values: List<Long>, color: Color) {
-            val path = buildPath(values) ?: return
-            // 半透明面积填充
-            val fill = Path().apply {
-                addPath(path)
-                lineTo(w, h - 4f)
-                lineTo(0f, h - 4f)
-                close()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            tickDays.forEach { day ->
+                Text("${day}日", fontSize = 10.sp, color = labelColor)
             }
-            drawPath(fill, color.copy(alpha = 0.12f))
-            drawPath(path, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
         }
-
-        // 先画面积大的，避免遮挡：顺序无所谓，半透明
-        drawSeries(expense, expenseColor)
-        drawSeries(income, incomeColor)
     }
 }
 
