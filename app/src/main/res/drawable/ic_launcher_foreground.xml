@@ -12,7 +12,7 @@
         android:strokeWidth="4"
         android:fillColor="#00000000" />
 
-    <!-- 账本内的三条记录线（加长，仍避开右下角徽章） -->
+    <!-- 账本内的三条记录线（加长，但仍避开右下角圆点） -->
     <path
         android:pathData="M38,42 h24"
         android:strokeColor="#249B76"
@@ -29,18 +29,8 @@
         android:strokeWidth="4"
         android:strokeLineCap="round" />
 
-    <!-- 右下角小徽章（缩小：r14 → r10） -->
+    <!-- 右下角独立小圆点（r6）：替换原来的铅笔徽章，不与任何线条相接 -->
     <path
-        android:pathData="M70,70 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0"
+        android:pathData="M70,70 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0"
         android:fillColor="#249B76" />
-
-    <!-- 徽章内一支斜置的白色铅笔（笔身 + 笔尖一体） -->
-    <path
-        android:pathData="M73.5,65 L76,67.5 L67.5,75 L64,76.5 L66,73 Z"
-        android:fillColor="#FFFFFF" />
-    <!-- 笔尾橡皮分界线 -->
-    <path
-        android:pathData="M72.6,65.9 L75.1,68.4"
-        android:strokeColor="#249B76"
-        android:strokeWidth="1" />
 </vector>
