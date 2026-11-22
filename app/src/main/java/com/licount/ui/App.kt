@@ -13,6 +13,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -190,6 +192,9 @@ private fun AppContent(vm: MainViewModel) {
                     )
                     2 -> StatsScreen(
                         transactions = monthTx,
+                        categoryCounts = categoryCounts,
+                        onEdit = { vm.updateTransaction(it) },
+                        onDelete = { vm.deleteTransaction(it) },
                         modifier = Modifier.padding(top = topInset),
                         bottomInset = bottomInset
                     )
@@ -221,13 +226,14 @@ private fun AppContent(vm: MainViewModel) {
             )
         }
 
-        // 抬到悬浮导航栏上方，避免被药丸挡住
+        // 抬到悬浮导航栏上方，避免被药丸挡住；提示本身换成 App 同款白卡片
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 88.dp)
+                .padding(bottom = 88.dp),
+            snackbar = { data -> ThemedSnackbar(data) }
         )
 
         if (showBackupMenu) {
@@ -268,6 +274,52 @@ private fun AppContent(vm: MainViewModel) {
                 onReplace = { vm.confirmRestore(RestoreMode.REPLACE) },
                 onDismiss = { vm.cancelRestore() }
             )
+        }
+    }
+}
+
+/**
+ * 撤销提示：M3 默认 Snackbar 用 inverseSurface（浅色主题下接近纯黑），
+ * 和全 App 的白卡片 / 线性图标不是一个语言。这里换成同款超椭圆白卡 + 主色动作。
+ */
+@Composable
+private fun ThemedSnackbar(data: SnackbarData) {
+    val visuals = data.visuals
+    DashboardCard(
+        modifier = Modifier.padding(horizontal = 20.dp),
+        radius = ControlCorner,
+        contentPadding = PaddingValues(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                visuals.message,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            if (!visuals.actionLabel.isNullOrEmpty()) {
+                TextButton(
+                    onClick = { data.performAction() },
+                    contentPadding = PaddingValues(horizontal = 10.dp)
+                ) {
+                    Text(
+                        visuals.actionLabel!!,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (visuals.withDismissAction) {
+                IconButton(onClick = { data.dismiss() }, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "关闭",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
 }

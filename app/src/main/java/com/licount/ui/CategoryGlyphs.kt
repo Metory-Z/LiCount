@@ -131,6 +131,49 @@ object CategoryGlyphs {
         }
     }
 
+    /** 红包：封套 + 弧形袋盖 + 圆形封口。 */
+    val redpacket: ImageVector by lazy {
+        glyph("CatRedpacket") {
+            strokePath {
+                box(6f, 3f, 18f, 21f, 2f)
+                moveTo(6f, 8.5f)
+                quadTo(12f, 13.5f, 18f, 8.5f)
+                ellipse(12f, 10.5f, 2f, 2f)
+            }
+        }
+    }
+
+    /** 转账：上下两条方向相反的箭头。 */
+    val transfer: ImageVector by lazy {
+        glyph("CatTransfer") {
+            strokePath {
+                hLine(4f, 19f, 9.5f)
+                moveTo(16f, 6.5f)
+                lineTo(19f, 9.5f)
+                lineTo(16f, 12.5f)
+                hLine(5f, 20f, 15.5f)
+                moveTo(8f, 12.5f)
+                lineTo(5f, 15.5f)
+                lineTo(8f, 18.5f)
+            }
+        }
+    }
+
+    /** 理发：剪刀（双环 + 交叉刀刃 + 铆钉）。 */
+    val haircut: ImageVector by lazy {
+        glyph("CatHaircut") {
+            strokePath {
+                ellipse(7f, 18.5f, 2.6f, 2.6f)
+                ellipse(17f, 18.5f, 2.6f, 2.6f)
+                moveTo(8.6f, 16.4f)
+                lineTo(18.5f, 4f)
+                moveTo(15.4f, 16.4f)
+                lineTo(5.5f, 4f)
+                ellipse(12f, 12f, 0.9f, 0.9f)
+            }
+        }
+    }
+
     /** 其他：方框内三条待归类横线。 */
     val other: ImageVector by lazy {
         glyph("CatOther") {
@@ -152,6 +195,9 @@ object CategoryGlyphs {
         "medical" -> medical
         "education" -> education
         "fund" -> fund
+        "redpacket" -> redpacket
+        "transfer" -> transfer
+        "haircut" -> haircut
         else -> other
     }
 }

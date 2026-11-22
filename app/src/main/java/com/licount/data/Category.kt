@@ -20,6 +20,9 @@ data class Category(
             Category("medical", "医疗"),
             Category("education", "学习"),
             Category("fund", "基金"),
+            Category("redpacket", "红包"),
+            Category("transfer", "转账"),
+            Category("haircut", "理发"),
             Category("other", "其他")
         )
 

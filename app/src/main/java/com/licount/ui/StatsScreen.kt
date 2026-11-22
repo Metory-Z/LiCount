@@ -2,14 +2,22 @@ package com.licount.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -18,19 +26,30 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.licount.data.Category
 import com.licount.data.Transaction
 import java.util.Calendar
 
-/** 统计页：本月每日收支趋势图（FlClash 流量图风格）+ 各分类支出占比。 */
+/**
+ * 统计页：本月每日收支趋势图（FlClash 流量图风格）+ 各分类支出占比。
+ * 点任一分类卡片会在底部弹层里展开该分类本月的全部支出明细，可直接编辑或删除。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
     transactions: List<Transaction>,
+    categoryCounts: Map<String, Int> = emptyMap(),
+    onEdit: (Transaction) -> Unit = {},
+    onDelete: (Transaction) -> Unit = {},
     modifier: Modifier = Modifier,
-    bottomInset: androidx.compose.ui.unit.Dp = 0.dp
+    bottomInset: Dp = 0.dp
 ) {
+    var selectedKey by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf<Transaction?>(null) }
+
     val expenseByCategory = remember(transactions) {
         transactions
             .filter { it.amountFen > 0 }
@@ -39,6 +58,7 @@ fun StatsScreen(
             .toList()
             .sortedByDescending { it.second }
     }
+    val totalExpense = expenseByCategory.sumOf { it.second }
 
     // 每日支出/收入序列（下标 = 日 - 1）
     val dayCount = remember {
@@ -71,7 +91,12 @@ fun StatsScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("📊", fontSize = 48.sp)
+            Icon(
+                AppGlyphs.stats,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(44.dp)
+            )
             Spacer(Modifier.height(12.dp))
             Text(
                 "暂无数据",
@@ -122,11 +147,105 @@ fun StatsScreen(
                 }
             }
         }
-        items(expenseByCategory) { (key, amount) ->
+        items(expenseByCategory, key = { it.first }) { (key, amount) ->
             val cat = Category.byKey(key)
-            val totalExpense = expenseByCategory.sumOf { it.second }
             val ratio = if (totalExpense == 0L) 0f else amount.toFloat() / totalExpense
-            CategoryBar(cat, amount, ratio)
+            CategoryBar(
+                cat = cat,
+                amount = amount,
+                ratio = ratio,
+                onClick = {
+                    selectedKey = key
+                    editing = null
+                }
+            )
+        }
+    }
+
+    // 分类明细：与日历当天明细同一套全宽底部弹层，记录可就地编辑/删除
+    selectedKey?.let { key ->
+        val cat = Category.byKey(key)
+        val list = remember(transactions, key) {
+            transactions.filter { it.amountFen > 0 && it.category == key }
+                .sortedByDescending { it.timestamp }
+        }
+        val sum = list.sumOf { it.amountFen }
+        val ratioText = if (totalExpense > 0L) {
+            " · 占本月支出 ${(sum.toFloat() / totalExpense * 100).toInt()}%"
+        } else ""
+        ModalBottomSheet(
+            onDismissRequest = {
+                selectedKey = null
+                editing = null
+            },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        CategoryGlyphs.byKey(key),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${cat.label} · 本月 ${list.size} 笔",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Text(
+                    "支出合计 ¥${formatMoney(sum)}$ratioText",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error
+                )
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                if (list.isEmpty()) {
+                    Text(
+                        "暂无支出记录",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    list.forEach { tx ->
+                        RecordRow(
+                            tx = tx,
+                            onClick = {
+                                editing = if (editing?.id == tx.id) null else tx
+                            },
+                            onDelete = {
+                                if (editing?.id == tx.id) editing = null
+                                onDelete(tx)
+                            }
+                        )
+                        if (editing?.id == tx.id) {
+                            EditTransactionDialog(
+                                tx = tx,
+                                categoryCounts = categoryCounts,
+                                embedded = true,
+                                onDismiss = { editing = null },
+                                onConfirm = { updated ->
+                                    onEdit(updated)
+                                    editing = null
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -183,11 +302,12 @@ private fun TrendChart(
     val scale = remember(expense, income) { computeChartScale(expense, income) }
     val chartHeight = 130.dp
     val dayCount = expense.size
-    val outlierDays = remember(expense, income, scale) {
-        (0 until dayCount).count { i ->
-            (expense.getOrNull(i) ?: 0L) > scale.ceiling ||
-                (income.getOrNull(i) ?: 0L) > scale.ceiling
-        }
+    // 具体哪几天超出刻度，脚注里要写清楚，否则用户不知道该去日历翻哪天
+    val outliers = remember(expense, income, scale) {
+        val list = mutableListOf<Pair<Int, Long>>()
+        expense.forEachIndexed { i, v -> if (v > scale.ceiling) list += (i + 1) to v }
+        income.forEachIndexed { i, v -> if (v > scale.ceiling) list += (i + 1) to v }
+        list
     }
     // 最多 5 个刻度，等距分布，首尾正好是 1 日和本月最后一天
     val tickDays = remember(dayCount) {
@@ -278,16 +398,6 @@ private fun TrendChart(
             drawSeries(income, incomeColor)
         }
 
-        // 明确告知刻度被压缩过，否则会误以为那天金额只有顶端那么高
-        if (outlierDays > 0) {
-            Text(
-                "▲ 有 $outlierDays 天超出刻度，最高 ¥${formatMoney(scale.maxValue)}",
-                fontSize = 10.sp,
-                color = labelColor,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-        }
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -298,12 +408,38 @@ private fun TrendChart(
                 Text("${day}日", fontSize = 10.sp, color = labelColor)
             }
         }
+
+        // 脚注放在 X 轴日期标签「下面」：夹在图和日期之间会让人误读成某个刻度的内容。
+        // 同时写出具体日期，和上一轮「趋势图看不出是哪天」的诉求对齐。
+        if (outliers.isNotEmpty()) {
+            val days = outliers.map { "${it.first}日" }.distinct()
+            val daysText = days.take(3).joinToString("、") +
+                if (days.size > 3) " 等 ${days.size} 天" else ""
+            Text(
+                "▲ $daysText 超出刻度，最高 ¥${formatMoney(scale.maxValue)}；曲线已置顶",
+                fontSize = 10.sp,
+                color = labelColor,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
     }
 }
 
 @Composable
-private fun CategoryBar(cat: Category, amount: Long, ratio: Float) {
+private fun CategoryBar(
+    cat: Category,
+    amount: Long,
+    ratio: Float,
+    onClick: () -> Unit
+) {
     DashboardCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = null,
+                indication = null,
+                onClick = onClick
+            ),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         radius = BlockCorner
     ) {
@@ -335,6 +471,12 @@ private fun CategoryBar(cat: Category, amount: Long, ratio: Float) {
                     "${(ratio * 100).toInt()}%",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "查看明细",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.size(14.dp)
                 )
             }
             // 横向条形
