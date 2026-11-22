@@ -33,6 +33,7 @@ import java.util.Locale
 /**
  * 日历页：整块卡片内的月历网格，每格显示当天支出（无支出但有收入时显示收入）。
  * 可切换月份；点击某天用全宽底部弹层展示当天明细，明细沿用流水页的记录卡片与编辑/删除能力。
+ * 点某一笔时在该行就地展开编辑卡，当天其他记录保持原位，不会把明细弹层收起。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +90,7 @@ fun CalendarScreen(
         year = cal.get(Calendar.YEAR)
         month = cal.get(Calendar.MONTH)
         selectedDay = 0
+        editing = null
     }
 
     Column(
@@ -239,13 +241,19 @@ fun CalendarScreen(
         }
     }
 
-    // 某天明细：全宽底部弹层，记录卡片不再被塞进窄对话框里挤压变形
+    // 某天明细：全宽底部弹层，记录卡片不再被塞进窄对话框里挤压变形。
+    // 一次展开到全高：编辑卡本身就比较高，若停在半展开状态，展开后其他记录
+    // 会被挤出可视区，看起来又像「其他项收回去」。
     if (selectedDay > 0) {
         val dayTxs = byDay[selectedDay].orEmpty()
         val dayExpense = dayTxs.filter { it.amountFen > 0 }.sumOf { it.amountFen }
         val dayIncome = dayTxs.filter { it.amountFen < 0 }.sumOf { -it.amountFen }
         ModalBottomSheet(
-            onDismissRequest = { selectedDay = 0 },
+            onDismissRequest = {
+                selectedDay = 0
+                editing = null
+            },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -292,31 +300,34 @@ fun CalendarScreen(
                     )
                 } else {
                     dayTxs.forEach { tx ->
-                        RecordRow(
-                            tx = tx,
-                            onClick = {
-                                selectedDay = 0
-                                editing = tx
-                            },
-                            onDelete = { onDelete(tx.id) }
-                        )
+                        if (editing?.id == tx.id) {
+                            // 就地展开编辑卡：当天其他记录保持原位，明细弹层不再整个收起
+                            EditTransactionDialog(
+                                tx = tx,
+                                categoryCounts = categoryCounts,
+                                embedded = true,
+                                onDismiss = { editing = null },
+                                onConfirm = { updated ->
+                                    onEdit(updated)
+                                    editing = null
+                                }
+                            )
+                        } else {
+                            RecordRow(
+                                tx = tx,
+                                onClick = { editing = tx },
+                                onDelete = {
+                                    if (editing?.id == tx.id) editing = null
+                                    onDelete(tx.id)
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    editing?.let { tx ->
-        EditTransactionDialog(
-            tx = tx,
-            categoryCounts = categoryCounts,
-            onDismiss = { editing = null },
-            onConfirm = { updated ->
-                onEdit(updated)
-                editing = null
-            }
-        )
-    }
 }
 
 /** 月历里的单个日期格。内容高度固定，保证有/无金额的格子日期不会上下跳动。 */

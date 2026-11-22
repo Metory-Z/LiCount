@@ -101,8 +101,13 @@ fun RecordRow(tx: Transaction, onClick: () -> Unit, onDelete: () -> Unit) {
 }
 
 /**
- * 修改记录对话框：金额、收支类型、分类、备注。
+ * 修改记录：金额、收支类型、分类、备注。
  * 分类按累计使用次数降序，常用的排在最前。
+ *
+ * 两种呈现方式共用同一份表单与状态：
+ * - 流水页：`embedded = false`，标准居中 AlertDialog；
+ * - 日历当天明细：`embedded = true`，在底部弹层的列表里就地展开成一张卡片，
+ *   当天的其他记录保持原位可见，不再把整个明细弹层收起。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -110,119 +115,149 @@ fun EditTransactionDialog(
     tx: Transaction,
     onDismiss: () -> Unit,
     onConfirm: (Transaction) -> Unit,
-    categoryCounts: Map<String, Int> = emptyMap()
+    categoryCounts: Map<String, Int> = emptyMap(),
+    embedded: Boolean = false
 ) {
-    val initialAmount = remember {
+    // 内联展开时切换编辑对象不会卸载这个 Composable，状态必须按记录 id 重置
+    val initialAmount = remember(tx.id) {
         val abs = kotlin.math.abs(tx.amountFen)
         if (abs % 100 == 0L) (abs / 100).toString()
         else String.format(Locale.US, "%d.%02d", abs / 100, abs % 100)
     }
-    var amountText by remember { mutableStateOf(initialAmount) }
-    var isIncome by remember { mutableStateOf(tx.amountFen < 0) }
-    var category by remember { mutableStateOf(tx.category) }
-    var note by remember { mutableStateOf(tx.note) }
+    var amountText by remember(tx.id) { mutableStateOf(initialAmount) }
+    var isIncome by remember(tx.id) { mutableStateOf(tx.amountFen < 0) }
+    var category by remember(tx.id) { mutableStateOf(tx.category) }
+    var note by remember(tx.id) { mutableStateOf(tx.note) }
 
     val amountFen = (amountText.toDoubleOrNull() ?: 0.0).let { (it * 100).toLong() }
+    val canSave = amountFen > 0
     val orderedCategories = remember(categoryCounts) {
         Category.presets.sortedByDescending { categoryCounts[it.key] ?: 0 }
     }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("修改记录", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text("金额（元）") },
-                    prefix = { Text("¥") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth()
+    val save = {
+        if (canSave) {
+            onConfirm(
+                tx.copy(
+                    amountFen = if (isIncome) -amountFen else amountFen,
+                    category = category,
+                    note = note
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DialogToggle(
-                        label = "支出",
-                        selected = !isIncome,
-                        onClick = { isIncome = false },
-                        modifier = Modifier.weight(1f)
+            )
+        }
+    }
+
+    // 内联模式下外层弹层已经可竖向滚动，表单不能再套一层 verticalScroll，
+    // 否则两层同向滚动会互相抢事件。scrollState 仍无条件创建，保证 remember 位置稳定。
+    val scrollState = rememberScrollState()
+    val fields: @Composable () -> Unit = {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = if (embedded) Modifier else Modifier.verticalScroll(scrollState)
+        ) {
+            OutlinedTextField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                label = { Text("金额（元）") },
+                prefix = { Text("¥") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DialogToggle(
+                    label = "支出",
+                    selected = !isIncome,
+                    onClick = { isIncome = false },
+                    modifier = Modifier.weight(1f)
+                )
+                DialogToggle(
+                    label = "收入",
+                    selected = isIncome,
+                    onClick = { isIncome = true },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Text("分类", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                orderedCategories.forEach { cat ->
+                    val selected = category == cat.key
+                    val bg by animateColorAsState(
+                        if (selected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        label = "edit-cat-bg"
                     )
-                    DialogToggle(
-                        label = "收入",
-                        selected = isIncome,
-                        onClick = { isIncome = true },
-                        modifier = Modifier.weight(1f)
+                    val fg by animateColorAsState(
+                        if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        label = "edit-cat-fg"
                     )
-                }
-                Text("分类", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    orderedCategories.forEach { cat ->
-                        val selected = category == cat.key
-                        val bg by animateColorAsState(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainerHigh,
-                            label = "edit-cat-bg"
-                        )
-                        val fg by animateColorAsState(
-                            if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                            label = "edit-cat-fg"
-                        )
-                        PressSurface(
-                            onClick = { category = cat.key },
-                            shape = SquircleCapsule,
-                            role = Role.RadioButton
+                    PressSurface(
+                        onClick = { category = cat.key },
+                        shape = SquircleCapsule,
+                        role = Role.RadioButton
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .background(bg)
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .background(bg)
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(cat.emoji, fontSize = 12.sp)
-                                Text(cat.label, fontSize = 12.sp, color = fg)
-                            }
+                            Text(cat.emoji, fontSize = 12.sp)
+                            Text(cat.label, fontSize = 12.sp, color = fg)
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    label = { Text("备注") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (amountFen > 0) {
-                        onConfirm(
-                            tx.copy(
-                                amountFen = if (isIncome) -amountFen else amountFen,
-                                category = category,
-                                note = note
-                            )
-                        )
-                    }
-                },
-                enabled = amountFen > 0
-            ) { Text("保存") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("备注") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
-    )
+    }
+
+    if (embedded) {
+        DashboardCard(
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+            radius = BlockCorner
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("修改这一笔", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = onDismiss) { Text("收起", fontSize = 13.sp) }
+                }
+                fields()
+                Button(
+                    onClick = save,
+                    enabled = canSave,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("保存修改") }
+            }
+        }
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("修改记录", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+            text = { fields() },
+            confirmButton = {
+                TextButton(onClick = save, enabled = canSave) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+        )
+    }
 }
 
 @Composable
