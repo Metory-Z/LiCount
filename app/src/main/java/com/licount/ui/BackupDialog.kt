@@ -9,20 +9,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.licount.data.Category
+import com.licount.data.Transaction
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
-/** 顶栏入口：备份与恢复菜单。 */
+/** 顶栏入口：备份与恢复菜单（含误删找回）。 */
 @Composable
 fun BackupMenuDialog(
     totalCount: Int,
+    deletedCount: Int,
     onExport: () -> Unit,
     onImport: () -> Unit,
+    onOpenDeleted: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -40,16 +46,22 @@ fun BackupMenuDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 BackupOption(
-                    emoji = "⬆️",
+                    icon = AppGlyphs.upload,
                     title = "导出备份",
                     desc = "选择保存位置，生成备份文件",
                     onClick = onExport
                 )
                 BackupOption(
-                    emoji = "⬇️",
+                    icon = AppGlyphs.download,
                     title = "从文件恢复",
                     desc = "选择之前的备份文件导入",
                     onClick = onImport
+                )
+                BackupOption(
+                    icon = AppGlyphs.trash,
+                    title = "最近删除" + if (deletedCount > 0) " ($deletedCount)" else "",
+                    desc = "找回误删的记录，最多保留最近 20 条",
+                    onClick = onOpenDeleted
                 )
             }
         },
@@ -89,13 +101,13 @@ fun RestoreConfirmDialog(
                 )
                 Text("请选择恢复方式", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 BackupOption(
-                    emoji = "🧩",
+                    icon = AppGlyphs.merge,
                     title = "合并导入",
                     desc = "保留现有记录，只补入备份里没有的（重复自动跳过）",
                     onClick = onMerge
                 )
                 BackupOption(
-                    emoji = "♻️",
+                    icon = AppGlyphs.replace,
                     title = "覆盖恢复",
                     desc = "清空当前全部记录，完全还原备份（换机迁移用，不可撤销）",
                     danger = true,
@@ -107,9 +119,93 @@ fun RestoreConfirmDialog(
     )
 }
 
+/** 最近删除：把本地留存的已删记录逐条恢复，或清空。 */
+@Composable
+fun RecentDeletedDialog(
+    items: List<Transaction>,
+    onRestore: (Transaction) -> Unit,
+    onClear: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text("最近删除", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    "删除后会在这里保留最近 20 条，随时可以恢复；清空之后就无法找回了。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (items.isEmpty()) {
+                    Text(
+                        "暂无删除记录",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                } else {
+                    items.forEach { tx -> DeletedRow(tx, onRestore = { onRestore(tx) }) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        dismissButton = {
+            if (items.isNotEmpty()) {
+                TextButton(onClick = onClear) {
+                    Text("清空", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun DeletedRow(tx: Transaction, onRestore: () -> Unit) {
+    val cat = Category.byKey(tx.category)
+    val isExpense = tx.amountFen > 0
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, SquircleShape(ControlCorner))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            CategoryGlyphs.byKey(cat.key),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(cat.label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(
+                formatDate(tx.timestamp),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            (if (isExpense) "-" else "+") + formatMoney(abs(tx.amountFen)),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(4.dp))
+        TextButton(onClick = onRestore, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            Text("恢复", fontSize = 12.sp)
+        }
+    }
+}
+
 @Composable
 private fun BackupOption(
-    emoji: String,
+    icon: ImageVector,
     title: String,
     desc: String,
     onClick: () -> Unit,
@@ -142,7 +238,7 @@ private fun BackupOption(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(emoji, fontSize = 20.sp)
+            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = fg)

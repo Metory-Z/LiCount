@@ -83,12 +83,15 @@ private fun AppContent(vm: MainViewModel) {
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(0) }
     var showBackupMenu by rememberSaveable { mutableStateOf(false) }
+    var showDeleted by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val pagerState = rememberPagerState(initialPage = tab) { PAGE_TITLES.size }
     val scope = rememberCoroutineScope()
 
     val dashboard by vm.dashboard.collectAsState()
     val monthTx by vm.monthTransactions.collectAsState(initial = emptyList())
     val pendingRestore by vm.pendingRestore.collectAsState()
+    val deleted by vm.deleted.collectAsState()
 
     // 各分类累计使用次数，用于首页与编辑弹窗的「常用优先」排序
     val categoryCounts = remember(dashboard.recent) {
@@ -106,6 +109,25 @@ private fun AppContent(vm: MainViewModel) {
 
     LaunchedEffect(Unit) {
         vm.message.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
+
+    // 删除后立刻给一次反悔机会；不点撤销也能在「最近删除」里找回
+    LaunchedEffect(Unit) {
+        vm.deletedEvent.collect { tx ->
+            // 每笔删除独立弹提示：连续删两笔时后一条直接顶掉前一条，不会排队等 10 秒。
+            // 被顶掉的那笔仍留在「最近删除」里可找回。
+            launch {
+                val label = (if (tx.amountFen > 0) "支出 " else "收入 ") +
+                    formatMoney(kotlin.math.abs(tx.amountFen))
+                val result = snackbarHostState.showSnackbar(
+                    message = "已删除 $label",
+                    actionLabel = "撤销",
+                    duration = SnackbarDuration.Long,
+                    withDismissAction = true
+                )
+                if (result == SnackbarResult.ActionPerformed) vm.undoDelete(tx)
+            }
+        }
     }
 
     LaunchedEffect(pagerState) {
@@ -176,6 +198,9 @@ private fun AppContent(vm: MainViewModel) {
                         categoryCounts = categoryCounts,
                         onDelete = { vm.deleteTransaction(it) },
                         onEdit = { vm.updateTransaction(it) },
+                        onAdd = { amount, cat, note, time ->
+                            vm.addTransactionAt(amount, cat, note, time)
+                        },
                         modifier = Modifier.padding(top = topInset),
                         bottomInset = bottomInset
                     )
@@ -196,9 +221,19 @@ private fun AppContent(vm: MainViewModel) {
             )
         }
 
+        // 抬到悬浮导航栏上方，避免被药丸挡住
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 88.dp)
+        )
+
         if (showBackupMenu) {
             BackupMenuDialog(
                 totalCount = dashboard.recent.size,
+                deletedCount = deleted.size,
                 onExport = {
                     showBackupMenu = false
                     exportLauncher.launch(backupFileName())
@@ -208,7 +243,20 @@ private fun AppContent(vm: MainViewModel) {
                     // */* 兼容部分文件管理器把 .json 识别为 octet-stream 的情况
                     importLauncher.launch(arrayOf("*/*"))
                 },
+                onOpenDeleted = {
+                    showBackupMenu = false
+                    showDeleted = true
+                },
                 onDismiss = { showBackupMenu = false }
+            )
+        }
+
+        if (showDeleted) {
+            RecentDeletedDialog(
+                items = deleted,
+                onRestore = { vm.restoreDeleted(it) },
+                onClear = { vm.clearDeleted() },
+                onDismiss = { showDeleted = false }
             )
         }
 

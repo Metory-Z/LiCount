@@ -7,6 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,7 +20,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.licount.data.Category
+import com.licount.data.TimeUtils
 import com.licount.data.Transaction
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -46,7 +51,12 @@ fun RecordRow(tx: Transaction, onClick: () -> Unit, onDelete: () -> Unit) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(cat.emoji, fontSize = 20.sp)
+                Icon(
+                    CategoryGlyphs.byKey(cat.key),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(22.dp)
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -116,18 +126,26 @@ fun EditTransactionDialog(
     onDismiss: () -> Unit,
     onConfirm: (Transaction) -> Unit,
     categoryCounts: Map<String, Int> = emptyMap(),
-    embedded: Boolean = false
+    embedded: Boolean = false,
+    isNew: Boolean = false,
+    initialTimestamp: Long = tx.timestamp
 ) {
     // 内联展开时切换编辑对象不会卸载这个 Composable，状态必须按记录 id 重置
-    val initialAmount = remember(tx.id) {
-        val abs = kotlin.math.abs(tx.amountFen)
-        if (abs % 100 == 0L) (abs / 100).toString()
-        else String.format(Locale.US, "%d.%02d", abs / 100, abs % 100)
+    val initialAmount = remember(tx.id, isNew) {
+        if (isNew) "" else {
+            val abs = kotlin.math.abs(tx.amountFen)
+            if (abs % 100 == 0L) (abs / 100).toString()
+            else String.format(Locale.US, "%d.%02d", abs / 100, abs % 100)
+        }
     }
-    var amountText by remember(tx.id) { mutableStateOf(initialAmount) }
-    var isIncome by remember(tx.id) { mutableStateOf(tx.amountFen < 0) }
-    var category by remember(tx.id) { mutableStateOf(tx.category) }
-    var note by remember(tx.id) { mutableStateOf(tx.note) }
+    var amountText by remember(tx.id, isNew) { mutableStateOf(initialAmount) }
+    var isIncome by remember(tx.id, isNew) { mutableStateOf(tx.amountFen < 0) }
+    var category by remember(tx.id, isNew) { mutableStateOf(tx.category) }
+    var note by remember(tx.id, isNew) { mutableStateOf(tx.note) }
+    // 日期按「天」调整，保留原时刻；补记时由调用方给目标日的时刻
+    var dateMillis by remember(tx.id, isNew) {
+        mutableStateOf(TimeUtils.dayStart(initialTimestamp))
+    }
 
     val amountFen = (amountText.toDoubleOrNull() ?: 0.0).let { (it * 100).toLong() }
     val canSave = amountFen > 0
@@ -140,7 +158,8 @@ fun EditTransactionDialog(
                 tx.copy(
                     amountFen = if (isIncome) -amountFen else amountFen,
                     category = category,
-                    note = note
+                    note = note,
+                    timestamp = TimeUtils.withDay(initialTimestamp, dateMillis)
                 )
             )
         }
@@ -154,6 +173,7 @@ fun EditTransactionDialog(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = if (embedded) Modifier else Modifier.verticalScroll(scrollState)
         ) {
+            DateField(dateMillis = dateMillis, onChange = { dateMillis = it })
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { amountText = it },
@@ -206,7 +226,12 @@ fun EditTransactionDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text(cat.emoji, fontSize = 12.sp)
+                            Icon(
+                                CategoryGlyphs.byKey(cat.key),
+                                contentDescription = null,
+                                tint = fg,
+                                modifier = Modifier.size(14.dp)
+                            )
                             Text(cat.label, fontSize = 12.sp, color = fg)
                         }
                     }
@@ -233,7 +258,11 @@ fun EditTransactionDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("修改这一笔", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (isNew) "补记一笔" else "修改这一笔",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                     TextButton(onClick = onDismiss) { Text("收起", fontSize = 13.sp) }
                 }
                 fields()
@@ -241,14 +270,20 @@ fun EditTransactionDialog(
                     onClick = save,
                     enabled = canSave,
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("保存修改") }
+                ) { Text(if (isNew) "保存这一笔" else "保存修改") }
             }
         }
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
             containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("修改记录", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+            title = {
+                Text(
+                    if (isNew) "补记一笔" else "修改记录",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
             text = { fields() },
             confirmButton = {
                 TextButton(onClick = save, enabled = canSave) { Text("保存") }
@@ -296,6 +331,55 @@ private fun DialogToggle(
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 color = fg
             )
+        }
+    }
+}
+
+/**
+ * 日期微调：左右箭头按天移动，不允许改到未来。
+ * 不用 DatePicker 是为了绕开 UTC 与本地时区差一天的坑；补记/改错日期通常只需前后挪几天，
+ * 真要跳到很久以前，直接在日历页点那天「补记一笔」更快。
+ */
+@Composable
+private fun DateField(dateMillis: Long, onChange: (Long) -> Unit) {
+    val today = remember { TimeUtils.dayStart(System.currentTimeMillis()) }
+    val label = remember(dateMillis, today) {
+        val text = SimpleDateFormat("M月d日 EEE", Locale.CHINA).format(Date(dateMillis))
+        when (dateMillis) {
+            today -> "$text · 今天"
+            TimeUtils.addDays(today, -1) -> "$text · 昨天"
+            else -> text
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text("日期", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = { onChange(TimeUtils.addDays(dateMillis, -1)) },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = "前一天",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            IconButton(
+                onClick = { onChange(TimeUtils.addDays(dateMillis, 1)) },
+                enabled = dateMillis < today,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "后一天",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

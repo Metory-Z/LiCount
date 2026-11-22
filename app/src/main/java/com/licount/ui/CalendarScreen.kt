@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.licount.data.Category
+import com.licount.data.TimeUtils
 import com.licount.data.Transaction
 import java.util.Calendar
 import java.util.Locale
@@ -40,8 +42,9 @@ import java.util.Locale
 fun CalendarScreen(
     transactions: List<Transaction>,
     categoryCounts: Map<String, Int>,
-    onDelete: (Long) -> Unit,
+    onDelete: (Transaction) -> Unit,
     onEdit: (Transaction) -> Unit,
+    onAdd: (amountFen: Long, category: String, note: String, timestamp: Long) -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp
 ) {
@@ -50,6 +53,10 @@ fun CalendarScreen(
     var month by remember { mutableStateOf(now.get(Calendar.MONTH)) } // 0-based
     var selectedDay by remember { mutableStateOf(0) }
     var editing by remember { mutableStateOf<Transaction?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    val defaultCategory = remember(categoryCounts) {
+        categoryCounts.maxByOrNull { it.value }?.key ?: Category.presets[0].key
+    }
 
     // 当前所选月份的全部记录，按「日」分组
     val byDay = remember(transactions, year, month) {
@@ -91,6 +98,7 @@ fun CalendarScreen(
         month = cal.get(Calendar.MONTH)
         selectedDay = 0
         editing = null
+        adding = false
     }
 
     Column(
@@ -174,7 +182,11 @@ fun CalendarScreen(
                                             txs = byDay[day].orEmpty(),
                                             isToday = isCurrentMonth && day == today,
                                             isSelected = selectedDay == day,
-                                            onClick = { selectedDay = day }
+                                            onClick = {
+                                                selectedDay = day
+                                                editing = null
+                                                adding = false
+                                            }
                                         )
                                     }
                                 }
@@ -248,10 +260,33 @@ fun CalendarScreen(
         val dayTxs = byDay[selectedDay].orEmpty()
         val dayExpense = dayTxs.filter { it.amountFen > 0 }.sumOf { it.amountFen }
         val dayIncome = dayTxs.filter { it.amountFen < 0 }.sumOf { -it.amountFen }
+        // 补记用「所选那天 + 当前时刻」：既落在正确的日期，又不会记成未来
+        val addTimestamp = remember(year, month, selectedDay) {
+            val clock = Calendar.getInstance()
+            Calendar.getInstance().apply {
+                clear()
+                set(Calendar.YEAR, year)
+                set(Calendar.MONTH, month)
+                set(Calendar.DAY_OF_MONTH, selectedDay)
+                set(Calendar.HOUR_OF_DAY, clock.get(Calendar.HOUR_OF_DAY))
+                set(Calendar.MINUTE, clock.get(Calendar.MINUTE))
+                set(Calendar.SECOND, clock.get(Calendar.SECOND))
+                set(Calendar.MILLISECOND, clock.get(Calendar.MILLISECOND))
+            }.timeInMillis
+        }
+        val canAdd = remember(year, month, selectedDay) {
+            Calendar.getInstance().apply {
+                clear()
+                set(Calendar.YEAR, year)
+                set(Calendar.MONTH, month)
+                set(Calendar.DAY_OF_MONTH, selectedDay)
+            }.timeInMillis <= TimeUtils.dayStart(System.currentTimeMillis())
+        }
         ModalBottomSheet(
             onDismissRequest = {
                 selectedDay = 0
                 editing = null
+                adding = false
             },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surface
@@ -291,6 +326,57 @@ fun CalendarScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+
+                // 补记：日期已由所选那天锁定，改日期可用表单里的左右箭头
+                if (adding && canAdd) {
+                    EditTransactionDialog(
+                        tx = Transaction(
+                            id = 0L,
+                            amountFen = 0L,
+                            category = defaultCategory,
+                            note = "",
+                            timestamp = addTimestamp
+                        ),
+                        categoryCounts = categoryCounts,
+                        embedded = true,
+                        isNew = true,
+                        initialTimestamp = addTimestamp,
+                        onDismiss = { adding = false },
+                        onConfirm = { created ->
+                            onAdd(
+                                created.amountFen,
+                                created.category,
+                                created.note,
+                                created.timestamp
+                            )
+                            adding = false
+                        }
+                    )
+                } else if (canAdd) {
+                    FilledTonalButton(
+                        onClick = {
+                            editing = null
+                            adding = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            AppGlyphs.plus,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("补记一笔", fontSize = 14.sp)
+                    }
+                } else {
+                    Text(
+                        "不能给未来的日期记账",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
                 if (dayTxs.isEmpty()) {
                     Text(
                         "这天没有记录",
@@ -315,10 +401,13 @@ fun CalendarScreen(
                         } else {
                             RecordRow(
                                 tx = tx,
-                                onClick = { editing = tx },
+                                onClick = {
+                                    adding = false
+                                    editing = tx
+                                },
                                 onDelete = {
                                     if (editing?.id == tx.id) editing = null
-                                    onDelete(tx.id)
+                                    onDelete(tx)
                                 }
                             )
                         }

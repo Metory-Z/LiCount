@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import com.licount.data.AppDatabase
 import com.licount.data.BackupCodec
+import com.licount.data.DeletedStore
 import com.licount.data.TimeUtils
 import com.licount.data.Transaction
 import com.licount.data.TransactionDao
@@ -56,6 +57,21 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     private val _message = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val message: SharedFlow<String> = _message.asSharedFlow()
 
+    /** 最近删除的记录（本地文件持久化，重启后仍在）。 */
+    private val _deleted = MutableStateFlow<List<Transaction>>(emptyList())
+    val deleted: StateFlow<List<Transaction>> = _deleted.asStateFlow()
+
+    /** 每删一笔发一次事件，供界面弹「撤销」提示。 */
+    private val _deletedEvent = MutableSharedFlow<Transaction>(extraBufferCapacity = 1)
+    val deletedEvent: SharedFlow<Transaction> = _deletedEvent.asSharedFlow()
+
+    /** 防止连点「恢复」把同一笔插两次。 */
+    private val restoringIds = HashSet<Long>()
+
+    init {
+        _deleted.value = DeletedStore.load(app)
+    }
+
     private val _pendingRestore = MutableStateFlow<PendingRestore?>(null)
     val pendingRestore: StateFlow<PendingRestore?> = _pendingRestore.asStateFlow()
 
@@ -80,8 +96,12 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** 本月每笔流水（用于统计页分类聚合与趋势图）。 */
     val monthTransactions = dao.observeBetween(monthStart, monthEnd)
 
-    /** 记一笔。amountFen 正数=支出，负数=收入。 */
-    fun addTransaction(amountFen: Long, category: String, note: String = "") {
+    /** 记一笔（默认记在今天）。amountFen 正数=支出，负数=收入。 */
+    fun addTransaction(amountFen: Long, category: String, note: String = "") =
+        addTransactionAt(amountFen, category, note, System.currentTimeMillis())
+
+    /** 补记：可指定时间戳，用于日历页给过去的某天补一笔。 */
+    fun addTransactionAt(amountFen: Long, category: String, note: String, timestamp: Long) {
         if (amountFen == 0L) return
         viewModelScope.launch {
             dao.insert(
@@ -89,20 +109,52 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
                     amountFen = amountFen,
                     category = category,
                     note = note,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = timestamp
                 )
             )
         }
     }
 
-    /** 修改一笔记录。 */
+    /** 修改一笔记录（含日期）。 */
     fun updateTransaction(tx: Transaction) {
         if (tx.amountFen == 0L) return
         viewModelScope.launch { dao.update(tx) }
     }
 
-    fun deleteTransaction(id: Long) {
-        viewModelScope.launch { dao.deleteById(id) }
+    /** 删除一笔，并留一份到「最近删除」+ 发出可撤销事件。 */
+    fun deleteTransaction(tx: Transaction) {
+        viewModelScope.launch {
+            dao.deleteById(tx.id)
+            val next = (listOf(tx) + _deleted.value.filter { it.id != tx.id })
+                .take(DeletedStore.MAX_ITEMS)
+            _deleted.value = next
+            withContext(Dispatchers.IO) { DeletedStore.save(app, next) }
+            _deletedEvent.tryEmit(tx)
+        }
+    }
+
+    /** 撤销刚刚那次删除。 */
+    fun undoDelete(tx: Transaction) = restoreDeleted(tx)
+
+    /** 从「最近删除」恢复一笔：保留原金额、分类、备注与时间。 */
+    fun restoreDeleted(tx: Transaction) {
+        if (!restoringIds.add(tx.id)) return
+        viewModelScope.launch {
+            // id 交给 Room 重新生成，避免与库中已有主键冲突；业务数据完全一致
+            dao.insert(tx.copy(id = 0L))
+            val next = _deleted.value.filterNot { it.id == tx.id }
+            _deleted.value = next
+            withContext(Dispatchers.IO) { DeletedStore.save(app, next) }
+            _message.tryEmit("已恢复这笔记录")
+            restoringIds.remove(tx.id)
+        }
+    }
+
+    fun clearDeleted() {
+        _deleted.value = emptyList()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { DeletedStore.save(app, emptyList()) }
+        }
     }
 
     // ---- 备份 / 恢复 ----

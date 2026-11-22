@@ -27,7 +27,7 @@ import java.util.Locale
 fun RecordsScreen(
     transactions: List<Transaction>,
     categoryCounts: Map<String, Int>,
-    onDelete: (Long) -> Unit,
+    onDelete: (Transaction) -> Unit,
     onEdit: (Transaction) -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp
@@ -45,7 +45,12 @@ fun RecordsScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("📭", fontSize = 48.sp)
+            Icon(
+                AppGlyphs.empty,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                modifier = Modifier.size(56.dp)
+            )
             Spacer(Modifier.height(12.dp))
             Text(
                 "还没有记录",
@@ -79,7 +84,7 @@ fun RecordsScreen(
                     RecordRow(
                         tx = tx,
                         onClick = { editing = tx },
-                        onDelete = { onDelete(tx.id) }
+                        onDelete = { onDelete(tx) }
                     )
                 }
             }

@@ -27,4 +27,22 @@ object TimeUtils {
         cal.set(Calendar.MILLISECOND, 0)
         return cal.timeInMillis
     }
+
+    /** 在「零点时间戳」上加减天数。 */
+    fun addDays(dayStart: Long, days: Int): Long {
+        val cal = Calendar.getInstance().apply { timeInMillis = dayStart }
+        cal.add(Calendar.DAY_OF_MONTH, days)
+        return cal.timeInMillis
+    }
+
+    /** 把 time 的时分秒搬到 dayStart 那一天，用于「改日期但保留原时刻」。 */
+    fun withDay(time: Long, dayStart: Long): Long {
+        val src = Calendar.getInstance().apply { timeInMillis = time }
+        val dst = Calendar.getInstance().apply { timeInMillis = dayStart }
+        dst.set(Calendar.HOUR_OF_DAY, src.get(Calendar.HOUR_OF_DAY))
+        dst.set(Calendar.MINUTE, src.get(Calendar.MINUTE))
+        dst.set(Calendar.SECOND, src.get(Calendar.SECOND))
+        dst.set(Calendar.MILLISECOND, src.get(Calendar.MILLISECOND))
+        return dst.timeInMillis
+    }
 }

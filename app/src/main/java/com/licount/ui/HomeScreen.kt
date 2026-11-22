@@ -325,7 +325,12 @@ private fun CategoryChip(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(category.emoji, fontSize = 14.sp)
+            Icon(
+                CategoryGlyphs.byKey(category.key),
+                contentDescription = null,
+                tint = fg,
+                modifier = Modifier.size(15.dp)
+            )
             Text(
                 category.label,
                 fontSize = 12.sp,
