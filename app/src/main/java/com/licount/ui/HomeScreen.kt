@@ -59,7 +59,7 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
-            .padding(top = 4.dp, bottom = bottomInset)
+            .padding(top = 8.dp, bottom = bottomInset)
     ) {
         // 可用高度偏小时整体降一档：优先保证键盘与保存完整可见
         val compact = maxHeight < 600.dp

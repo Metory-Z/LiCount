@@ -209,8 +209,8 @@ fun StatsScreen(
                     color = MaterialTheme.colorScheme.error
                 )
                 HorizontalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                 )
                 if (list.isEmpty()) {
                     Text(

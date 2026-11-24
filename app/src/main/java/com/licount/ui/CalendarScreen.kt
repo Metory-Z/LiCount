@@ -108,12 +108,13 @@ fun CalendarScreen(
             .padding(horizontal = 14.dp)
             .padding(top = 8.dp, bottom = bottomInset + 12.dp)
     ) {
-        // 月份头、星期、网格、当月合计装进同一张卡，元素不再散落在近背景色上
-        // 左右留白收紧到 16 / 10dp，把宽度尽量让给 7 列格子，避免金额被裁
+        // 月份头、星期、网格、本月合计装进同一张卡，元素不再散落在近背景色上
+        // 页面 14dp / 卡内 8dp 是为了把宽度尽量让给 7 列格子，避免金额被裁；
+        // 底部合计行另外单独补 8dp，让文字与首页一样距卡片边 16dp。
+        // 主卡沿用 DashboardCard 默认的 32dp 大卡圆角，与首页 / 统计一致。
         DashboardCard(
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
-            modifier = Modifier.fillMaxWidth(),
-            radius = BlockCorner
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // 标题居中，箭头紧挨标题，而不是被 SpaceBetween 顶到屏幕两端
@@ -196,29 +197,32 @@ fun CalendarScreen(
                 }
 
                 HorizontalDivider(
-                    thickness = 1.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                 )
 
-                // 当月合计：两列各占一半，金额按长度自动降字号，长数字不会被拦腰裁掉
+                // 本月合计：两列各占一半，金额按长度自动降字号，长数字不会被拦腰裁掉。
+                // 单独补 8dp 让文字缩进与首页 / 流水的 16dp 一致，网格宽度不受影响。
                 val expenseText = formatMoney(monthExpense)
                 val incomeText = formatMoney(monthIncome)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "当月支出",
+                            "本月支出",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             expenseText,
                             fontSize = when {
-                                expenseText.length >= 11 -> 12.sp
-                                expenseText.length >= 9 -> 14.sp
-                                else -> 16.sp
+                                expenseText.length >= 11 -> 14.sp
+                                expenseText.length >= 9 -> 16.sp
+                                else -> 18.sp
                             },
                             maxLines = 1,
                             softWrap = false,
@@ -231,16 +235,16 @@ fun CalendarScreen(
                         horizontalAlignment = Alignment.End
                     ) {
                         Text(
-                            "当月收入",
+                            "本月收入",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             incomeText,
                             fontSize = when {
-                                incomeText.length >= 11 -> 12.sp
-                                incomeText.length >= 9 -> 14.sp
-                                else -> 16.sp
+                                incomeText.length >= 11 -> 14.sp
+                                incomeText.length >= 9 -> 16.sp
+                                else -> 18.sp
                             },
                             maxLines = 1,
                             softWrap = false,
