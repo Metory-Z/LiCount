@@ -14,7 +14,7 @@ android {
         targetSdk = 34
         // 随 CI 运行号递增，保证每次出包都比上一版新，覆盖安装不会被「版本过旧」拒绝
         versionCode = 1000 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
-        versionName = "1.0.2"
+        versionName = "1.0.3"
     }
 
     // 固定签名：CI 由 GitHub Secrets 注入，本地可指向项目根目录的 licount-release.jks。
