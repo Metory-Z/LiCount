@@ -131,14 +131,18 @@ object CategoryGlyphs {
         }
     }
 
-    /** 红包：封套 + 弧形袋盖 + 圆形封口。 */
+    /**
+     * 红包：封套 + 弧形袋盖 + 圆形封扣。
+     * 袋盖弧线的最低点约在 y=9.5，封扣放到 y=14，两者留出足够描边间隙，
+     * 避免曲线从圆里穿过去糊成一团。
+     */
     val redpacket: ImageVector by lazy {
         glyph("CatRedpacket") {
             strokePath {
                 box(6f, 3f, 18f, 21f, 2f)
-                moveTo(6f, 8.5f)
-                quadTo(12f, 13.5f, 18f, 8.5f)
-                ellipse(12f, 10.5f, 2f, 2f)
+                moveTo(6f, 8f)
+                quadTo(12f, 11f, 18f, 8f)
+                ellipse(12f, 14f, 1.6f, 1.6f)
             }
         }
     }

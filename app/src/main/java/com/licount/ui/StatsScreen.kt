@@ -268,7 +268,7 @@ private fun Legend(label: String, color: Color) {
 /**
  * Y 轴刻度：以 P90 分位数作为「正常日」的尺度。
  * 原来直接取全局最大值，只要某天有一笔大额收支，其余所有天的曲线就被压成贴着基线的一条直线。
- * 现在离群的大额不参与决定刻度，只在图里置顶并标记，正常波动依然占满图表高度。
+ * 现在离群的大额不参与决定刻度，只在图里截断并标记，正常波动依然占满图表高度。
  */
 private data class ChartScale(val ceiling: Long, val maxValue: Long)
 
@@ -416,7 +416,7 @@ private fun TrendChart(
             val daysText = days.take(3).joinToString("、") +
                 if (days.size > 3) " 等 ${days.size} 天" else ""
             Text(
-                "▲ $daysText 超出刻度，最高 ¥${formatMoney(scale.maxValue)}；曲线已置顶",
+                "▲ $daysText 超出图表上限，最高 ¥${formatMoney(scale.maxValue)}；超出部分已截断",
                 fontSize = 10.sp,
                 color = labelColor,
                 modifier = Modifier.padding(top = 6.dp)
