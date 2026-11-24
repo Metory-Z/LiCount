@@ -290,7 +290,62 @@ private fun computeChartScale(expense: List<Long>, income: List<Long>): ChartSca
     }
 }
 
-/** 每日收支双线趋势图（线 + 半透明填充 + 日期刻度，仿 FlClash 上下行流量图）。 */
+/**
+ * 把逐日数据点连成平滑曲线：单调三次 Hermite 插值（Fritsch–Carlson 切线）。
+ *
+ * 普通 Catmull-Rom 会在尖峰前后过冲，配合「削顶」时可能把线拱出图表上边界，
+ * 甚至画出数据里并不存在的假峰。单调插值保证每一段都严格落在相邻两点的高度
+ * 之间，峰谷处切线压成 0，只做形状柔化、不改动任何数据点的位置。
+ */
+private fun smoothCurve(points: List<Offset>): Path {
+    val path = Path()
+    if (points.isEmpty()) return path
+    path.moveTo(points[0].x, points[0].y)
+    val n = points.size
+    if (n < 2) return path
+
+    // x 必须严格递增才能插值；异常数据退回普通折线，避免除零
+    for (i in 1 until n) {
+        if (points[i].x <= points[i - 1].x) {
+            for (j in 1 until n) path.lineTo(points[j].x, points[j].y)
+            return path
+        }
+    }
+
+    val delta = FloatArray(n - 1) { i ->
+        (points[i + 1].y - points[i].y) / (points[i + 1].x - points[i].x)
+    }
+    val tangent = FloatArray(n)
+    tangent[0] = delta[0]
+    tangent[n - 1] = delta[n - 2]
+    for (i in 1 until n - 1) {
+        val d0 = delta[i - 1]
+        val d1 = delta[i]
+        tangent[i] = if (d0 * d1 <= 0f) {
+            0f
+        } else {
+            val h0 = points[i].x - points[i - 1].x
+            val h1 = points[i + 1].x - points[i].x
+            val w1 = 2f * h1 + h0
+            val w2 = h1 + 2f * h0
+            (w1 + w2) / (w1 / d0 + w2 / d1)
+        }
+    }
+
+    for (i in 0 until n - 1) {
+        val p0 = points[i]
+        val p1 = points[i + 1]
+        val third = (p1.x - p0.x) / 3f
+        path.cubicTo(
+            p0.x + third, p0.y + tangent[i] * third,
+            p1.x - third, p1.y - tangent[i + 1] * third,
+            p1.x, p1.y
+        )
+    }
+    return path
+}
+
+/** 每日收支双曲线趋势图（平滑曲线 + 半透明填充 + 日期刻度，仿 FlClash 上下行流量图）。 */
 @Composable
 private fun TrendChart(
     expense: List<Long>,
@@ -358,11 +413,9 @@ private fun TrendChart(
 
             fun drawSeries(values: List<Long>, color: Color) {
                 if (values.isEmpty()) return
-                val path = Path()
-                values.forEachIndexed { i, v ->
-                    val p = point(i, v)
-                    if (i == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
-                }
+                // 曲线仍严格经过每个数据点，圆点 / 削顶三角画在原始点位上
+                val points = values.mapIndexed { i, v -> point(i, v) }
+                val path = smoothCurve(points)
                 // 半透明面积填充
                 val fill = Path().apply {
                     addPath(path)
