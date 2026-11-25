@@ -241,4 +241,19 @@ object AppGlyphs {
             }
         }
     }
+
+    /** 今日未记录提醒：铃铛，与分类/导航图标同一套 24 网格、1.8dp 圆头描边。 */
+    val notice: ImageVector by lazy {
+        glyph("Notice") {
+            strokePath {
+                moveTo(6f, 16.5f)
+                quadTo(6f, 9f, 12f, 5f)
+                quadTo(18f, 9f, 18f, 16.5f)
+                hLine(4.5f, 19.5f, 16.5f)
+                vLine(12f, 3.2f, 5f)
+                moveTo(10f, 16.5f)
+                quadTo(12f, 20f, 14f, 16.5f)
+            }
+        }
+    }
 }

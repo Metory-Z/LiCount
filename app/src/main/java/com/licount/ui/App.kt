@@ -291,13 +291,15 @@ private fun AppContent(vm: MainViewModel) {
 /**
  * 撤销提示：M3 默认 Snackbar 用 inverseSurface（浅色主题下接近纯黑），
  * 和全 App 的白卡片 / 线性图标不是一个语言。这里换成同款超椭圆白卡 + 主色动作。
+ * 圆角用矮卡档位 BlockCorner，与流水行、统计分类行一致；ControlCorner 是按键档位，
+ * 用在这张悬浮卡上会显得过方。
  */
 @Composable
 private fun ThemedSnackbar(data: SnackbarData) {
     val visuals = data.visuals
     DashboardCard(
         modifier = Modifier.padding(horizontal = 20.dp),
-        radius = ControlCorner,
+        radius = BlockCorner,
         contentPadding = PaddingValues(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
