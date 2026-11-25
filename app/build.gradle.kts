@@ -79,15 +79,13 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
-    implementation("androidx.navigation:navigation-compose:2.7.7")
+    // 页面切换用 HorizontalPager 实现，不需要 navigation-compose；
+    // 设置项走应用私有文件，不需要 DataStore。
 
     // Room 持久层（SQLite）
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     kapt("androidx.room:room-compiler:2.6.1")
-
-    // DataStore 偏好设置
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.09.00"))

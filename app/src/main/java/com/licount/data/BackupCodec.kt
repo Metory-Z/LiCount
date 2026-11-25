@@ -52,11 +52,16 @@ object BackupCodec {
             throw IllegalArgumentException("这不是轻记的备份文件")
         }
         val version = root.optInt("version", 1)
-        if (version > VERSION) {
-            throw IllegalArgumentException("备份文件版本 v$version 过新，请升级轻记后再恢复")
+        if (version < 1 || version > VERSION) {
+            throw IllegalArgumentException("备份文件版本 v$version 不受支持")
         }
         val array = root.optJSONArray("transactions")
             ?: throw IllegalArgumentException("备份文件缺少记录数据")
+        // 导出时写了 count，用它发现文件被截断或改坏的情况
+        val declaredCount = root.optInt("count", -1)
+        if (declaredCount >= 0 && declaredCount != array.length()) {
+            throw IllegalArgumentException("备份文件记录数不匹配，可能已损坏")
+        }
         val items = ArrayList<Transaction>(array.length())
         for (i in 0 until array.length()) {
             val obj = array.optJSONObject(i) ?: continue

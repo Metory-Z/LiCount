@@ -8,10 +8,14 @@ import androidx.room.withTransaction
 import com.licount.data.AppDatabase
 import com.licount.data.BackupCodec
 import com.licount.data.DeletedStore
+import com.licount.data.RestoreSnapshot
 import com.licount.data.TimeUtils
 import com.licount.data.Transaction
 import com.licount.data.TransactionDao
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -20,7 +24,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -44,14 +51,30 @@ data class PendingRestore(
     val exportedAt: Long
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private val db = AppDatabase.get(app)
     private val dao: TransactionDao = db.transactionDao()
 
-    private val monthRange: Pair<Long, Long> = TimeUtils.currentMonthRange()
-    private val monthStart: Long = monthRange.first
-    private val monthEnd: Long = monthRange.second
+    /** 当前「今天 / 本月」的时间窗口；跨天跨月时自动更新，不需要重启 App。 */
+    private data class ClockWindow(
+        val dayStart: Long,
+        val monthStart: Long,
+        val monthEnd: Long
+    )
+
+    private fun clockWindow(now: Long = System.currentTimeMillis()): ClockWindow {
+        val (start, end) = TimeUtils.currentMonthRange(now)
+        return ClockWindow(TimeUtils.dayStart(now), start, end)
+    }
+
+    private val clock = MutableStateFlow(clockWindow())
+
+    private fun refreshClock() {
+        val next = clockWindow()
+        if (next != clock.value) clock.value = next
+    }
 
     /** 一次性提示（Toast）。 */
     private val _message = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -68,33 +91,49 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** 防止连点「恢复」把同一笔插两次。 */
     private val restoringIds = HashSet<Long>()
 
+    /** 上一次「覆盖恢复」被清空的记录数，>0 时界面提供撤销入口。 */
+    private val _snapshotCount = MutableStateFlow(0)
+    val snapshotCount: StateFlow<Int> = _snapshotCount.asStateFlow()
+
     init {
         _deleted.value = DeletedStore.load(app)
+        viewModelScope.launch {
+            _snapshotCount.value = withContext(Dispatchers.IO) { RestoreSnapshot.load(app).size }
+        }
+        // 每分钟检查一次；只有跨天或跨月才真正 emit，不会造成无谓重组
+        viewModelScope.launch {
+            while (isActive) {
+                delay(60_000L)
+                refreshClock()
+            }
+        }
     }
 
     private val _pendingRestore = MutableStateFlow<PendingRestore?>(null)
     val pendingRestore: StateFlow<PendingRestore?> = _pendingRestore.asStateFlow()
 
-    val dashboard: StateFlow<DashboardData> = combine(
-        dao.observeExpenseSum(monthStart, monthEnd),
-        dao.observeIncomeSum(monthStart, monthEnd),
-        dao.observeAll()
-    ) { expense, income, all ->
-        val today = TimeUtils.dayStart(System.currentTimeMillis())
-        DashboardData(
-            monthExpense = expense,
-            monthIncome = income,
-            todayRecorded = all.any { TimeUtils.dayStart(it.timestamp) == today },
-            recent = all
-        )
+    val dashboard: StateFlow<DashboardData> = clock.flatMapLatest { window ->
+        combine(
+            dao.observeExpenseSum(window.monthStart, window.monthEnd),
+            dao.observeIncomeSum(window.monthStart, window.monthEnd),
+            dao.observeAll()
+        ) { expense, income, all ->
+            DashboardData(
+                monthExpense = expense,
+                monthIncome = income,
+                todayRecorded = all.any { TimeUtils.dayStart(it.timestamp) == window.dayStart },
+                recent = all
+            )
+        }
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         DashboardData()
     )
 
-    /** 本月每笔流水（用于统计页分类聚合与趋势图）。 */
-    val monthTransactions = dao.observeBetween(monthStart, monthEnd)
+    /** 本月每笔流水（用于统计页分类聚合与趋势图），随月份自动切换区间。 */
+    val monthTransactions: Flow<List<Transaction>> =
+        clock.flatMapLatest { dao.observeBetween(it.monthStart, it.monthEnd) }
 
     /** 记一笔（默认记在今天）。amountFen 正数=支出，负数=收入。 */
     fun addTransaction(amountFen: Long, category: String, note: String = "") =
@@ -103,6 +142,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** 补记：可指定时间戳，用于日历页给过去的某天补一笔。 */
     fun addTransactionAt(amountFen: Long, category: String, note: String, timestamp: Long) {
         if (amountFen == 0L) return
+        // 万一 App 在后台跨了月，写之前先把统计区间切到正确的月份
+        refreshClock()
         viewModelScope.launch {
             dao.insert(
                 Transaction(
@@ -118,17 +159,25 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     /** 修改一笔记录（含日期）。 */
     fun updateTransaction(tx: Transaction) {
         if (tx.amountFen == 0L) return
+        refreshClock()
         viewModelScope.launch { dao.update(tx) }
     }
 
     /** 删除一笔，并留一份到「最近删除」+ 发出可撤销事件。 */
     fun deleteTransaction(tx: Transaction) {
         viewModelScope.launch {
-            dao.deleteById(tx.id)
-            val next = (listOf(tx) + _deleted.value.filter { it.id != tx.id })
-                .take(DeletedStore.MAX_ITEMS)
-            _deleted.value = next
-            withContext(Dispatchers.IO) { DeletedStore.save(app, next) }
+            val ok = runCatching {
+                dao.deleteById(tx.id)
+                // 原子更新：快速连删两笔时不会互相覆盖，「最近删除」不会少一条
+                _deleted.update { current ->
+                    (listOf(tx) + current.filter { it.id != tx.id }).take(DeletedStore.MAX_ITEMS)
+                }
+                withContext(Dispatchers.IO) { DeletedStore.save(app, _deleted.value) }
+            }.onFailure { e ->
+                _message.tryEmit("删除失败：${e.message ?: "未知错误"}")
+            }.isSuccess
+            if (!ok) return@launch
+            refreshClock()
             _deletedEvent.tryEmit(tx)
         }
     }
@@ -140,20 +189,33 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     fun restoreDeleted(tx: Transaction) {
         if (!restoringIds.add(tx.id)) return
         viewModelScope.launch {
-            // id 交给 Room 重新生成，避免与库中已有主键冲突；业务数据完全一致
-            dao.insert(tx.copy(id = 0L))
-            val next = _deleted.value.filterNot { it.id == tx.id }
-            _deleted.value = next
-            withContext(Dispatchers.IO) { DeletedStore.save(app, next) }
-            _message.tryEmit("已恢复这笔记录")
-            restoringIds.remove(tx.id)
+            try {
+                runCatching {
+                    // id 交给 Room 重新生成，避免与库中已有主键冲突；业务数据完全一致
+                    dao.insert(tx.copy(id = 0L))
+                    _deleted.update { current -> current.filterNot { it.id == tx.id } }
+                    withContext(Dispatchers.IO) { DeletedStore.save(app, _deleted.value) }
+                }.onSuccess {
+                    _message.tryEmit("已恢复这笔记录")
+                    refreshClock()
+                }.onFailure { e ->
+                    _message.tryEmit("恢复失败：${e.message ?: "未知错误"}")
+                }
+            } finally {
+                // 无论成败都释放，避免异常后这笔永远无法再恢复
+                restoringIds.remove(tx.id)
+            }
         }
     }
 
     fun clearDeleted() {
         _deleted.value = emptyList()
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { DeletedStore.save(app, emptyList()) }
+            runCatching {
+                withContext(Dispatchers.IO) { DeletedStore.save(app, emptyList()) }
+            }.onFailure { e ->
+                _message.tryEmit("清空失败：${e.message ?: "未知错误"}")
+            }
         }
     }
 
@@ -207,7 +269,9 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
             runCatching {
                 withContext(Dispatchers.IO) {
                     val backup = BackupCodec.decode(readText(pending.uri))
-                    db.withTransaction {
+                    // 覆盖前先留一份完整快照，误点也能一键撤销
+                    val before = if (mode == RestoreMode.REPLACE) dao.getAllOnce() else emptyList()
+                    val added = db.withTransaction {
                         val toInsert: List<Transaction> = if (mode == RestoreMode.REPLACE) {
                             dao.deleteAll()
                             backup.items
@@ -215,26 +279,65 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
                             val existing = dao.getAllOnce().map { it.businessKey() }.toHashSet()
                             backup.items
                                 .filter { it.businessKey() !in existing }
+                                // 备份文件自身也可能含重复条目，一并去掉
+                                .distinctBy { it.businessKey() }
                                 .map { it.copy(id = 0L) }
                         }
                         if (toInsert.isEmpty()) 0
                         else dao.insertIgnoreAll(toInsert).count { it != -1L }
                     }
+                    if (mode == RestoreMode.REPLACE) {
+                        RestoreSnapshot.save(app, before)
+                        _snapshotCount.value = before.size
+                    }
+                    added
                 }
             }.onSuccess { added ->
+                // 用实际入库条数提示，decode 跳过无效条目、IGNORE 跳过重复时数字仍然准确
                 _message.tryEmit(
-                    if (mode == RestoreMode.REPLACE) "已覆盖恢复 ${pending.count} 笔记录"
+                    if (mode == RestoreMode.REPLACE) "已覆盖恢复 $added 笔记录，原记录可在备份菜单撤销"
                     else "已合并导入 $added 笔新记录（重复项已跳过）"
                 )
+                refreshClock()
             }.onFailure { e ->
                 _message.tryEmit("恢复失败：${e.message ?: "未知错误"}")
             }
         }
     }
 
+    /** 撤销上一次「覆盖恢复」，把被清空的记录原样写回。 */
+    fun undoReplace() {
+        viewModelScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val snapshot = RestoreSnapshot.load(app)
+                    if (snapshot.isEmpty()) throw IllegalStateException("没有可撤销的覆盖记录")
+                    db.withTransaction {
+                        dao.deleteAll()
+                        dao.insertIgnoreAll(snapshot)
+                    }
+                    RestoreSnapshot.clear(app)
+                    snapshot.size
+                }
+            }.onSuccess { count ->
+                _snapshotCount.value = 0
+                _message.tryEmit("已撤销覆盖恢复，找回 $count 笔原记录")
+                refreshClock()
+            }.onFailure { e ->
+                _message.tryEmit("撤销失败：${e.message ?: "未知错误"}")
+            }
+        }
+    }
+
     /** 合并时用于判重的业务键：同一金额、分类、备注、时刻视为同一笔。 */
-    private fun Transaction.businessKey(): String =
-        "$amountFen|$category|$note|$timestamp"
+    private data class BusinessKey(
+        val amountFen: Long,
+        val category: String,
+        val note: String,
+        val timestamp: Long
+    )
+
+    private fun Transaction.businessKey() = BusinessKey(amountFen, category, note, timestamp)
 
     private fun readText(uri: Uri): String =
         app.contentResolver.openInputStream(uri)?.use { stream ->

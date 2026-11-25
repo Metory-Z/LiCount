@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,12 +49,14 @@ fun CalendarScreen(
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp
 ) {
-    val now = remember { Calendar.getInstance() }
-    var year by remember { mutableStateOf(now.get(Calendar.YEAR)) }
-    var month by remember { mutableStateOf(now.get(Calendar.MONTH)) } // 0-based
-    var selectedDay by remember { mutableStateOf(0) }
+    // 不缓存「今天」：App 常驻跨天/跨月后，今天高亮与「不能给未来记账」仍然正确
+    val now = Calendar.getInstance()
+    var year by rememberSaveable { mutableStateOf(now.get(Calendar.YEAR)) }
+    var month by rememberSaveable { mutableStateOf(now.get(Calendar.MONTH)) } // 0-based
+    var selectedDay by rememberSaveable { mutableStateOf(0) }
+    // Transaction 不是 Parcelable，编辑中的记录只留在组合里；切 tab 已由 Pager 常驻保住
     var editing by remember { mutableStateOf<Transaction?>(null) }
-    var adding by remember { mutableStateOf(false) }
+    var adding by rememberSaveable { mutableStateOf(false) }
     val defaultCategory = remember(categoryCounts) {
         categoryCounts.maxByOrNull { it.value }?.key ?: Category.presets[0].key
     }
@@ -264,18 +267,14 @@ fun CalendarScreen(
         val dayTxs = byDay[selectedDay].orEmpty()
         val dayExpense = dayTxs.filter { it.amountFen > 0 }.sumOf { it.amountFen }
         val dayIncome = dayTxs.filter { it.amountFen < 0 }.sumOf { -it.amountFen }
-        // 补记用「所选那天 + 当前时刻」：既落在正确的日期，又不会记成未来
+        // 补记落在所选那天的零点：日期准确，也不会伪造一个「昨天 16:00 实际消费」的假时刻。
+        // 零点记录在流水/明细里只显示日期并标注「补记」（见 formatDate）。
         val addTimestamp = remember(year, month, selectedDay) {
-            val clock = Calendar.getInstance()
             Calendar.getInstance().apply {
                 clear()
                 set(Calendar.YEAR, year)
                 set(Calendar.MONTH, month)
                 set(Calendar.DAY_OF_MONTH, selectedDay)
-                set(Calendar.HOUR_OF_DAY, clock.get(Calendar.HOUR_OF_DAY))
-                set(Calendar.MINUTE, clock.get(Calendar.MINUTE))
-                set(Calendar.SECOND, clock.get(Calendar.SECOND))
-                set(Calendar.MILLISECOND, clock.get(Calendar.MILLISECOND))
             }.timeInMillis
         }
         val canAdd = remember(year, month, selectedDay) {

@@ -2,7 +2,6 @@ package com.licount.ui
 
 import android.app.Activity
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -29,6 +28,9 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -94,6 +96,7 @@ private fun AppContent(vm: MainViewModel) {
     val monthTx by vm.monthTransactions.collectAsState(initial = emptyList())
     val pendingRestore by vm.pendingRestore.collectAsState()
     val deleted by vm.deleted.collectAsState()
+    val snapshotCount by vm.snapshotCount.collectAsState()
 
     // 各分类累计使用次数，用于首页与编辑弹窗的「常用优先」排序
     val categoryCounts = remember(dashboard.recent) {
@@ -169,6 +172,8 @@ private fun AppContent(vm: MainViewModel) {
 
             HorizontalPager(
                 state = pagerState,
+                // 四个页面全部常驻，切 tab 回来不会销毁组合、丢掉输了一半的金额或所选月份
+                beyondViewportPageCount = 3,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 when (page) {
@@ -240,6 +245,11 @@ private fun AppContent(vm: MainViewModel) {
             BackupMenuDialog(
                 totalCount = dashboard.recent.size,
                 deletedCount = deleted.size,
+                snapshotCount = snapshotCount,
+                onUndoReplace = {
+                    showBackupMenu = false
+                    vm.undoReplace()
+                },
                 onExport = {
                     showBackupMenu = false
                     exportLauncher.launch(backupFileName())
@@ -375,6 +385,11 @@ private fun FloatingNavigation(
                                         role = Role.Tab,
                                         onClick = { onSelect(index) }
                                     )
+                                    .semantics {
+                                        // 显式 receiver：FloatingNavigation 的参数也叫 selected（Int），会遮蔽语义属性
+                                        this.selected = active
+                                        stateDescription = if (active) "已选中" else "未选中"
+                                    }
                             ) {
                                 Box(
                                     Modifier.width(itemWidth).height(itemHeight),
@@ -385,7 +400,9 @@ private fun FloatingNavigation(
                                         verticalArrangement = Arrangement.spacedBy(2.dp)
                                     ) {
                                         Icon(
-                                            icons[index], null, tint = foreground,
+                                            icons[index],
+                                            contentDescription = label,
+                                            tint = foreground,
                                             modifier = Modifier.size(27.dp)
                                         )
                                         Text(

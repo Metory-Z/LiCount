@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -18,7 +20,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.licount.data.Category
+import com.licount.data.MoneyInput
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -44,15 +48,13 @@ fun HomeScreen(
     val orderedCategories = remember(categoryCounts) {
         Category.presets.sortedByDescending { categoryCounts[it.key] ?: 0 }
     }
-    var amountText by remember { mutableStateOf("") }
-    var isIncome by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf(orderedCategories.first().key) }
+    // 用 rememberSaveable：旋转屏幕、切到别的 App 再回来时，输了一半的金额不会丢
+    var amountText by rememberSaveable { mutableStateOf("") }
+    var isIncome by rememberSaveable { mutableStateOf(false) }
+    var selectedCategory by rememberSaveable { mutableStateOf(orderedCategories.first().key) }
 
-    val amountFen = remember(amountText) {
-        // 输入的是「元」，转成分；最多两位小数
-        val yuan = amountText.toDoubleOrNull() ?: 0.0
-        (yuan * 100).toLong()
-    }
+    // 按字符串解析，不经过 Double，避免 0.29 → 28 分这类浮点截断
+    val amountFen = MoneyInput.parseYuanToFen(amountText)
     val canSave = amountFen > 0
 
     BoxWithConstraints(
@@ -154,7 +156,12 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
-                                Text("📌", fontSize = 11.sp)
+                                Icon(
+                                    Icons.Outlined.Notifications,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(12.dp)
+                                )
                                 Text(
                                     "今天还没记账，记一笔吧",
                                     fontSize = 11.sp,
@@ -462,18 +469,31 @@ private fun handleInput(current: String, key: String): String {
     }
 }
 
-/** 金额格式化：分 → 元，千分位。 */
+/** 金额格式化：分 → 元，千分位；固定 Locale，避免系统语言改变千分位符号。 */
 fun formatMoney(fen: Long): String {
     val sign = if (fen < 0) "-" else ""
     val abs = kotlin.math.abs(fen)
     val yuan = abs / 100
     val cents = abs % 100
-    val formatted = "%,d".format(yuan)
-    return if (cents == 0L) "$sign$formatted" else "$sign$formatted.${"%02d".format(cents)}"
+    val formatted = String.format(Locale.US, "%,d", yuan)
+    return if (cents == 0L) "$sign$formatted"
+    else "$sign$formatted.${String.format(Locale.US, "%02d", cents)}"
 }
 
-/** 时间戳格式化（供流水列表用）。 */
+private val dayOnlyFormat = SimpleDateFormat("M月d日", Locale.CHINA)
+private val dayTimeFormat = SimpleDateFormat("M月d日 HH:mm", Locale.CHINA)
+
+/**
+ * 时间戳格式化（流水 / 日历明细 / 最近删除共用）。
+ * 补记的记录落在当天零点，没有真实消费时刻，只显示日期并标注「补记」；
+ * 正常记账的记录显示日期 + 时分。
+ */
 fun formatDate(timestamp: Long): String {
-    val fmt = SimpleDateFormat("M月d日 HH:mm", Locale.getDefault())
-    return fmt.format(Date(timestamp))
+    val cal = Calendar.getInstance().apply { timeInMillis = timestamp }
+    val hasClockTime = cal.get(Calendar.HOUR_OF_DAY) != 0 ||
+        cal.get(Calendar.MINUTE) != 0 ||
+        cal.get(Calendar.SECOND) != 0
+    val date = Date(timestamp)
+    return if (hasClockTime) dayTimeFormat.format(date)
+    else dayOnlyFormat.format(date) + " · 补记"
 }

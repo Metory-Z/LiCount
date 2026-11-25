@@ -60,11 +60,10 @@ fun StatsScreen(
     }
     val totalExpense = expenseByCategory.sumOf { it.second }
 
-    // 每日支出/收入序列（下标 = 日 - 1）
-    val dayCount = remember {
-        Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
-    }
-    val dailyExpense = remember(transactions) {
+    // 每日支出/收入序列（下标 = 日 - 1）。趋势画到今天为止；
+    // 不用 remember 缓存天数，否则 App 常驻跨天/跨月后横轴不会跟着更新。
+    val dayCount = Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
+    val dailyExpense = remember(transactions, dayCount) {
         val arr = LongArray(dayCount)
         transactions.forEach { tx ->
             val day = Calendar.getInstance()
@@ -74,7 +73,7 @@ fun StatsScreen(
         }
         arr.toList()
     }
-    val dailyIncome = remember(transactions) {
+    val dailyIncome = remember(transactions, dayCount) {
         val arr = LongArray(dayCount)
         transactions.forEach { tx ->
             val day = Calendar.getInstance()

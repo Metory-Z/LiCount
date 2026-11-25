@@ -26,6 +26,8 @@ import kotlin.math.abs
 fun BackupMenuDialog(
     totalCount: Int,
     deletedCount: Int,
+    snapshotCount: Int = 0,
+    onUndoReplace: () -> Unit = {},
     onExport: () -> Unit,
     onImport: () -> Unit,
     onOpenDeleted: () -> Unit,
@@ -63,6 +65,14 @@ fun BackupMenuDialog(
                     desc = "找回误删的记录，最多保留最近 20 条",
                     onClick = onOpenDeleted
                 )
+                if (snapshotCount > 0) {
+                    BackupOption(
+                        icon = AppGlyphs.replace,
+                        title = "撤销上次覆盖 ($snapshotCount)",
+                        desc = "找回被覆盖恢复清空的全部原始记录",
+                        onClick = onUndoReplace
+                    )
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } }
@@ -109,7 +119,7 @@ fun RestoreConfirmDialog(
                 BackupOption(
                     icon = AppGlyphs.replace,
                     title = "覆盖恢复",
-                    desc = "清空当前全部记录，完全还原备份（换机迁移用，不可撤销）",
+                    desc = "清空当前全部记录，完全还原备份（清空前自动留快照，可撤销）",
                     danger = true,
                     onClick = onReplace
                 )

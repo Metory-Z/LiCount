@@ -12,14 +12,17 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.licount.data.Category
+import com.licount.data.MoneyInput
 import com.licount.data.TimeUtils
 import com.licount.data.Transaction
 import java.text.SimpleDateFormat
@@ -69,6 +72,8 @@ fun RecordRow(tx: Transaction, onClick: () -> Unit, onDelete: () -> Unit) {
                     Text(
                         tx.note,
                         fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -138,16 +143,16 @@ fun EditTransactionDialog(
             else String.format(Locale.US, "%d.%02d", abs / 100, abs % 100)
         }
     }
-    var amountText by remember(tx.id, isNew) { mutableStateOf(initialAmount) }
-    var isIncome by remember(tx.id, isNew) { mutableStateOf(tx.amountFen < 0) }
-    var category by remember(tx.id, isNew) { mutableStateOf(tx.category) }
-    var note by remember(tx.id, isNew) { mutableStateOf(tx.note) }
-    // 日期按「天」调整，保留原时刻；补记时由调用方给目标日的时刻
-    var dateMillis by remember(tx.id, isNew) {
+    var amountText by rememberSaveable(tx.id, isNew) { mutableStateOf(initialAmount) }
+    var isIncome by rememberSaveable(tx.id, isNew) { mutableStateOf(tx.amountFen < 0) }
+    var category by rememberSaveable(tx.id, isNew) { mutableStateOf(tx.category) }
+    var note by rememberSaveable(tx.id, isNew) { mutableStateOf(tx.note) }
+    // 日期按「天」调整，保留原时刻；补记时目标日是零点，明细里就不显示假时刻
+    var dateMillis by rememberSaveable(tx.id, isNew) {
         mutableStateOf(TimeUtils.dayStart(initialTimestamp))
     }
 
-    val amountFen = (amountText.toDoubleOrNull() ?: 0.0).let { (it * 100).toLong() }
+    val amountFen = MoneyInput.parseYuanToFen(amountText)
     val canSave = amountFen > 0
     val orderedCategories = remember(categoryCounts) {
         Category.presets.sortedByDescending { categoryCounts[it.key] ?: 0 }
@@ -176,7 +181,7 @@ fun EditTransactionDialog(
             DateField(dateMillis = dateMillis, onChange = { dateMillis = it })
             OutlinedTextField(
                 value = amountText,
-                onValueChange = { amountText = it },
+                onValueChange = { amountText = MoneyInput.sanitize(it) },
                 label = { Text("金额（元）") },
                 prefix = { Text("¥") },
                 singleLine = true,
@@ -342,7 +347,8 @@ private fun DialogToggle(
  */
 @Composable
 private fun DateField(dateMillis: Long, onChange: (Long) -> Unit) {
-    val today = remember { TimeUtils.dayStart(System.currentTimeMillis()) }
+    // 不缓存：跨过午夜后「今天 / 昨天」标签与右箭头禁用状态仍然正确
+    val today = TimeUtils.dayStart(System.currentTimeMillis())
     val label = remember(dateMillis, today) {
         val text = SimpleDateFormat("M月d日 EEE", Locale.CHINA).format(Date(dateMillis))
         when (dateMillis) {
