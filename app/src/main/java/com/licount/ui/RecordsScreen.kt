@@ -34,9 +34,16 @@ fun RecordsScreen(
 ) {
     var editing by remember { mutableStateOf<Transaction?>(null) }
     val dateFormat = remember { SimpleDateFormat("MM.dd", Locale.US) }
-    // groupBy 使用 LinkedHashMap，保留倒序输入的日期顺序
+    // 显式按「时间倒序 + id 倒序」排一次：补记都落在零点，同日多笔时间戳相同，
+    // 只靠传入列表的顺序不足以保证从备份 / 合并恢复来的数据也稳定
     val groups = remember(transactions) {
-        transactions.groupBy { TimeUtils.dayStart(it.timestamp) }
+        transactions
+            .sortedWith(
+                compareByDescending<Transaction> { it.timestamp }
+                    .thenByDescending { it.id }
+            )
+            // groupBy 使用 LinkedHashMap，保留倒序输入的日期顺序
+            .groupBy { TimeUtils.dayStart(it.timestamp) }
     }
 
     if (transactions.isEmpty()) {

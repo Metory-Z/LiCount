@@ -13,15 +13,23 @@ object RestoreSnapshot {
 
     private fun file(context: Context) = File(context.filesDir, FILE_NAME)
 
-    fun save(context: Context, items: List<Transaction>) {
-        runCatching {
-            // 先写临时文件再替换，避免写到一半被杀留下半截 JSON
-            val tmp = File(context.filesDir, "$FILE_NAME.tmp")
-            tmp.writeText(BackupCodec.encode(items), Charsets.UTF_8)
-            val target = file(context)
-            if (!tmp.renameTo(target)) tmp.copyTo(target, overwrite = true)
+    /**
+     * 返回是否真的写入成功。调用方必须据此决定是否承诺「可撤销」——
+     * 以前异常被无条件吞掉，磁盘满时会出现「提示能撤销、实际没留底」的丢数据路径。
+     */
+    fun save(context: Context, items: List<Transaction>): Boolean = runCatching {
+        // 先写临时文件再替换，避免写到一半被杀留下半截 JSON
+        val tmp = File(context.filesDir, "$FILE_NAME.tmp")
+        tmp.writeText(BackupCodec.encode(items), Charsets.UTF_8)
+        val target = file(context)
+        if (target.exists()) target.delete()
+        if (!tmp.renameTo(target)) {
+            tmp.copyTo(target, overwrite = true)
+            tmp.delete()
         }
-    }
+        // 回读校验：decode 会核对记录数，避免撤销时拿到空文件或半截 JSON
+        BackupCodec.decode(target.readText(Charsets.UTF_8)).items.size == items.size
+    }.getOrDefault(false)
 
     fun load(context: Context): List<Transaction> = runCatching {
         val f = file(context)

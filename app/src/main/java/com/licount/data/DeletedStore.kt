@@ -23,8 +23,17 @@ object DeletedStore {
 
     fun save(context: Context, items: List<Transaction>) {
         runCatching {
-            File(context.filesDir, FILE_NAME)
-                .writeText(BackupCodec.encode(items.take(MAX_ITEMS)), Charsets.UTF_8)
+            // 与覆盖恢复快照一致：临时文件 + 原子替换，避免写一半被杀
+            // 留下半截 JSON，下次启动时「最近删除」被静默清空
+            val dir = context.filesDir
+            val tmp = File(dir, "$FILE_NAME.tmp")
+            tmp.writeText(BackupCodec.encode(items.take(MAX_ITEMS)), Charsets.UTF_8)
+            val target = File(dir, FILE_NAME)
+            if (target.exists()) target.delete()
+            if (!tmp.renameTo(target)) {
+                tmp.copyTo(target, overwrite = true)
+                tmp.delete()
+            }
         }
     }
 }

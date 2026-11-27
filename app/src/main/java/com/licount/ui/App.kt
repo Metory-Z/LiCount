@@ -165,10 +165,15 @@ private fun AppContent(vm: MainViewModel) {
                 )
             }
         ) { padding ->
-            val navDockInset = 96.dp +
+            val navBarBottom =
                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            // 首页保存键贴着卡片底边，要完整避开悬浮药丸；三个可滚动页只需
+            // 让最后一项能滚到药丸上方，多出的 24dp 正是日历下方那块空白
+            val homeInset = 96.dp + navBarBottom
+            val scrollInset = 72.dp + navBarBottom
             val topInset = padding.calculateTopPadding()
-            val bottomInset = if (keyboardVisible) 12.dp else navDockInset
+            val homeBottomInset = if (keyboardVisible) 12.dp else homeInset
+            val scrollBottomInset = if (keyboardVisible) 12.dp else scrollInset
 
             HorizontalPager(
                 state = pagerState,
@@ -184,7 +189,7 @@ private fun AppContent(vm: MainViewModel) {
                         onSave = { amount, cat -> vm.addTransaction(amount, cat) },
                         categoryCounts = categoryCounts,
                         modifier = Modifier.padding(top = topInset),
-                        bottomInset = bottomInset
+                        bottomInset = homeBottomInset
                     )
                     1 -> RecordsScreen(
                         // 流水显示全部记录（含历史月份），否则恢复旧备份后看不到数据
@@ -193,7 +198,7 @@ private fun AppContent(vm: MainViewModel) {
                         onDelete = { vm.deleteTransaction(it) },
                         onEdit = { vm.updateTransaction(it) },
                         modifier = Modifier.padding(top = topInset),
-                        bottomInset = bottomInset
+                        bottomInset = scrollBottomInset
                     )
                     2 -> StatsScreen(
                         transactions = monthTx,
@@ -201,7 +206,7 @@ private fun AppContent(vm: MainViewModel) {
                         onEdit = { vm.updateTransaction(it) },
                         onDelete = { vm.deleteTransaction(it) },
                         modifier = Modifier.padding(top = topInset),
-                        bottomInset = bottomInset
+                        bottomInset = scrollBottomInset
                     )
                     3 -> CalendarScreen(
                         transactions = dashboard.recent,
@@ -212,7 +217,7 @@ private fun AppContent(vm: MainViewModel) {
                             vm.addTransactionAt(amount, cat, note, time)
                         },
                         modifier = Modifier.padding(top = topInset),
-                        bottomInset = bottomInset
+                        bottomInset = scrollBottomInset
                     )
                 }
             }

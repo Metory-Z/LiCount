@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -63,10 +64,16 @@ fun CalendarScreen(
     // 当前所选月份的全部记录，按「日」分组
     val byDay = remember(transactions, year, month) {
         val cal = Calendar.getInstance()
-        transactions.filter { tx ->
-            cal.timeInMillis = tx.timestamp
-            cal.get(Calendar.YEAR) == year && cal.get(Calendar.MONTH) == month
-        }.groupBy { tx ->
+        transactions
+            .sortedWith(
+                compareByDescending<Transaction> { it.timestamp }
+                    .thenByDescending { it.id }
+            )
+            .filter { tx ->
+                cal.timeInMillis = tx.timestamp
+                cal.get(Calendar.YEAR) == year && cal.get(Calendar.MONTH) == month
+            }
+            .groupBy { tx ->
             cal.timeInMillis = tx.timestamp
             cal.get(Calendar.DAY_OF_MONTH)
         }
@@ -85,6 +92,18 @@ fun CalendarScreen(
     val weekCount = ((leadingBlanks + daysInMonth + 6) / 7).coerceAtMost(6)
     val isCurrentMonth = year == now.get(Calendar.YEAR) && month == now.get(Calendar.MONTH)
     val today = now.get(Calendar.DAY_OF_MONTH)
+
+    // 测量页面实际可用高度：卡片至少撑满一屏，剩余高度由网格行高吸收。
+    // 以前卡片按内容自适应、页面底部又叠了一段导航留白，卡片下方会空出一大块。
+    var rootHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val cardHeight = (rootHeightPx / density.density - 8f - bottomInset.value - 12f)
+        .coerceAtLeast(320f)
+    // 卡内固定占用：上下 padding 32 + 月份头 36 + 星期 16 + 分隔线 1
+    // + 合计行 42 + 五段内容之间的 4×10 间距 40
+    val gridHeight = (cardHeight - 167f).coerceAtLeast(0f)
+    val rowHeight = ((gridHeight - (weekCount - 1) * 2f) / weekCount)
+        .coerceIn(48f, 88f).dp
 
     val monthExpense = byDay.values.flatten().filter { it.amountFen > 0 }.sumOf { it.amountFen }
     val monthIncome = byDay.values.flatten().filter { it.amountFen < 0 }.sumOf { -it.amountFen }
@@ -106,6 +125,7 @@ fun CalendarScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .onSizeChanged { rootHeightPx = it.height }
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp)
             .padding(top = 8.dp, bottom = bottomInset + 12.dp)
@@ -116,7 +136,9 @@ fun CalendarScreen(
         // 主卡沿用 DashboardCard 默认的 32dp 大卡圆角，与首页 / 统计一致。
         DashboardCard(
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = cardHeight.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // 标题居中，箭头紧挨标题，而不是被 SpaceBetween 顶到屏幕两端
@@ -178,10 +200,11 @@ fun CalendarScreen(
                                 for (dow in 0..6) {
                                     val day = week * 7 + dow - leadingBlanks + 1
                                     if (day !in 1..daysInMonth) {
-                                        Spacer(Modifier.weight(1f).height(58.dp))
+                                        Spacer(Modifier.weight(1f).height(rowHeight))
                                     } else {
                                         DayCell(
                                             day = day,
+                                            rowHeight = rowHeight,
                                             txs = byDay[day].orEmpty(),
                                             isToday = isCurrentMonth && day == today,
                                             isSelected = selectedDay == day,
@@ -422,10 +445,11 @@ fun CalendarScreen(
 
 }
 
-/** 月历里的单个日期格。内容高度固定，保证有/无金额的格子日期不会上下跳动。 */
+/** 月历里的单个日期格。行高按页面剩余空间自适应，保证各周日期对齐、金额不被裁。 */
 @Composable
 private fun RowScope.DayCell(
     day: Int,
+    rowHeight: Dp,
     txs: List<Transaction>,
     isToday: Boolean,
     isSelected: Boolean,
@@ -456,7 +480,7 @@ private fun RowScope.DayCell(
     Box(
         modifier = Modifier
             .weight(1f)
-            .height(58.dp)
+            .height(rowHeight)
             .padding(horizontal = 0.5.dp)
     ) {
         Column(
