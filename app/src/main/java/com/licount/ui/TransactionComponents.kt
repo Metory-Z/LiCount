@@ -281,6 +281,7 @@ fun EditTransactionDialog(
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
+            shape = SquircleShape(CardCorner),
             containerColor = MaterialTheme.colorScheme.surface,
             title = {
                 Text(

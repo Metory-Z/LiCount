@@ -178,6 +178,7 @@ fun StatsScreen(
                 editing = null
             },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = SquircleTopShape(CardCorner),
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(

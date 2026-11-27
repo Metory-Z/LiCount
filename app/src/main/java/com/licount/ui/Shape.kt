@@ -69,6 +69,48 @@ fun squirclePath(
     return path
 }
 
+/**
+ * 只圆上方两角的超椭圆路径。底部弹层贴着屏幕底边，若四角全圆，下沿两角会
+ * 在屏幕边缘露出缺口；Material 3 的 BottomSheet 默认同样只圆上两角。
+ * 曲率仍走 SUPERELLIPSE_EXPONENT，和大卡片是同一套语言。
+ */
+fun squircleTopPath(
+    size: Size,
+    cornerRadius: Float,
+    exponent: Float = SUPERELLIPSE_EXPONENT
+): Path {
+    val w = size.width
+    val h = size.height
+    val r = cornerRadius.coerceIn(0f, min(w, h) / 2f)
+    val path = Path()
+    if (r <= 0f) {
+        path.addRect(androidx.compose.ui.geometry.Rect(0f, 0f, w, h))
+        return path
+    }
+
+    path.moveTo(r, 0f)
+    path.lineTo(w - r, 0f)
+    quadrant(r, exponent) { dx, dy -> path.lineTo(w - r + dy, r - dx) } // 右上
+    path.lineTo(w, h)  // 右下：沿右边缘直落到底，保持方角贴屏幕
+    path.lineTo(0f, h) // 左下：方角
+    path.lineTo(0f, r)
+    quadrant(r, exponent) { dx, dy -> path.lineTo(r - dx, r - dy) }      // 左上
+    path.close()
+    return path
+}
+
+/** 上圆下方的超椭圆形状，专供贴屏幕底边的弹层。 */
+@Immutable
+data class SquircleTopShape(val radius: Dp) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline = Outline.Generic(
+        squircleTopPath(size, with(density) { radius.toPx() })
+    )
+}
+
 /** 固定半径的超椭圆圆角。替代 RoundedCornerShape。 */
 @Immutable
 data class SquircleShape(val radius: Dp) : Shape {
@@ -97,4 +139,3 @@ object SquircleCapsule : Shape {
 val CardCorner = 32.dp
 val BlockCorner = 22.dp
 val ControlCorner = 14.dp
-val IconCorner = 12.dp

@@ -242,17 +242,21 @@ object AppGlyphs {
         }
     }
 
-    /** 今日未记录提醒：铃铛，与分类/导航图标同一套 24 网格、1.8dp 圆头描边。 */
+    /**
+     * 今日未记录提醒：铃铛，与分类/导航图标同一套 24 网格、1.8dp 圆头描边。
+     * 三笔分离：钟身一笔闭合（圆顶收腰、底沿外扩，close 自带底沿横线）、
+     * 顶部短柄与铃舌都留白，缩到 15dp 时不会像旧版那样把笔画粘成一团。
+     */
     val notice: ImageVector by lazy {
         glyph("Notice") {
             strokePath {
-                moveTo(6f, 16.5f)
-                quadTo(6f, 9f, 12f, 5f)
-                quadTo(18f, 9f, 18f, 16.5f)
-                hLine(4.5f, 19.5f, 16.5f)
-                vLine(12f, 3.2f, 5f)
-                moveTo(10f, 16.5f)
-                quadTo(12f, 20f, 14f, 16.5f)
+                moveTo(5f, 17f)
+                quadTo(6.5f, 9f, 12f, 5.5f)
+                quadTo(17.5f, 9f, 19f, 17f)
+                close()
+                vLine(12f, 2.8f, 4f)
+                moveTo(10f, 19f)
+                quadTo(12f, 21.5f, 14f, 19f)
             }
         }
     }

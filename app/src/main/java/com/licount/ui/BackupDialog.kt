@@ -35,6 +35,7 @@ fun BackupMenuDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = SquircleShape(CardCorner),
         containerColor = MaterialTheme.colorScheme.surface,
         title = { Text("备份与恢复", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = {
@@ -97,6 +98,7 @@ fun RestoreConfirmDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = SquircleShape(CardCorner),
         containerColor = MaterialTheme.colorScheme.surface,
         title = { Text("恢复备份", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = {
@@ -139,6 +141,7 @@ fun RecentDeletedDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = SquircleShape(CardCorner),
         containerColor = MaterialTheme.colorScheme.surface,
         title = { Text("最近删除", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = {

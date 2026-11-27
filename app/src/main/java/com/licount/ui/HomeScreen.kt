@@ -159,7 +159,7 @@ fun HomeScreen(
                                     AppGlyphs.notice,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(13.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
                                 Text(
                                     "今天还没记账，记一笔吧",

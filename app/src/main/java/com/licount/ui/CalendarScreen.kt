@@ -14,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
@@ -292,6 +291,7 @@ fun CalendarScreen(
                 adding = false
             },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            shape = SquircleTopShape(CardCorner),
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -433,12 +433,24 @@ private fun RowScope.DayCell(
 ) {
     val expense = txs.filter { it.amountFen > 0 }.sumOf { it.amountFen }
     val income = txs.filter { it.amountFen < 0 }.sumOf { -it.amountFen }
-    // 44x58dp 的小格子不能用 14dp 大圆角：底部圆角区正好压在金额行上，会把文字两端裁掉
-    val shape = SquircleShape(8.dp)
-    val bg = when {
+    // 指示状态全部收进 24dp 日期徽章：整格铺灰会让「有记录」的日子连成马赛克墙，
+    // 同时和「今天」圆徽章、「选中」整格底色抢同一块位置，还逼着格子用 8dp 特例圆角
+    // 才不裁到金额文字。现在整格不裁剪、不填色，金额行彻底不受圆角影响。
+    val badgeBg = when {
+        isToday -> MaterialTheme.colorScheme.primary
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         txs.isNotEmpty() -> MaterialTheme.colorScheme.surfaceContainerHigh
         else -> Color.Transparent
+    }
+    val badgeOutline = when {
+        isSelected && isToday -> MaterialTheme.colorScheme.onPrimary
+        isSelected -> MaterialTheme.colorScheme.primary
+        else -> null
+    }
+    val dayColor = when {
+        isToday -> MaterialTheme.colorScheme.onPrimary
+        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Box(
@@ -450,15 +462,6 @@ private fun RowScope.DayCell(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(shape)
-                .background(bg)
-                .then(
-                    if (isSelected) {
-                        Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, shape)
-                    } else {
-                        Modifier
-                    }
-                )
                 .clickable(onClick = onClick),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -466,9 +469,11 @@ private fun RowScope.DayCell(
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .background(
-                        if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        SquircleCapsule
+                    .background(badgeBg, SquircleCapsule)
+                    .then(
+                        badgeOutline?.let {
+                            Modifier.border(1.5.dp, it, SquircleCapsule)
+                        } ?: Modifier
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -486,11 +491,7 @@ private fun RowScope.DayCell(
                         )
                     ),
                     fontWeight = if (isToday) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isToday) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
+                    color = dayColor
                 )
             }
             Spacer(Modifier.height(2.dp))
