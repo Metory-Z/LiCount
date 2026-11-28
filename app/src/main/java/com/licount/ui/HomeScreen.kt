@@ -29,10 +29,9 @@ import java.util.Locale
  * 首页：一整块记账面板，整页不滚动。
  *
  * 顶部一条紧凑的本月收支信息条；下方一张完整输入卡，内部依次是
- * 金额展示区、收支切换、单行横滑分类、数字键盘与保存。
- * 富余高度由键盘四行按键吸收（按键随屏幕变高），金额上方只留固定小间距，
+ * 金额展示区（吸收剩余高度）、收支切换、单行横滑分类、数字键盘与保存。
  * 键盘始终位于卡片底部、悬浮导航栏上方，任何屏幕高度下都无需上滑。
- * 矮屏通过 BoxWithConstraints 自动收紧间距与按键下限，不引入滚动。
+ * 矮屏通过 BoxWithConstraints 自动收紧间距与按键高度，不引入滚动。
  */
 @Composable
 fun HomeScreen(
@@ -67,21 +66,14 @@ fun HomeScreen(
         val compact = maxHeight < 600.dp
         // 两张卡片之间的间距要大于卡内间距，形成 16 > 12 > 8 > 6 的层级
         val outerGap = if (compact) 10.dp else 16.dp
-        // 屏幕越高卡内间距略增；但富余高度主要交给键盘行高（见 NumPad），
-        // 不再像以前那样全堆在金额上方形成一大片空白
-        val innerGap = when {
-            compact -> 8.dp
-            maxHeight < 680.dp -> 12.dp
-            else -> 14.dp
-        }
+        // 卡内间距适度加大，把原本堆在金额上方的大片空白匀给控件之间
+        val innerGap = if (compact) 8.dp else 12.dp
         val cardPadding = if (compact) 10.dp else 12.dp
         val keyGap = if (compact) 4.dp else 6.dp
-        // 键盘四行按剩余高度自适应；这里只给极端小屏的键高下限
-        val minKeyHeight = if (compact) 46.dp else 54.dp
+        // 键盘整行定高，退格键与数字键完全等高
+        val keyHeight = if (compact) 50.dp else 56.dp
         val savePadding = if (compact) 9.dp else 13.dp
         val chipPadding = if (compact) 6.dp else 8.dp
-        // 金额与提醒之间的固定呼吸空间，取代原来的 Spacer(weight(1f))
-        val amountTopGap = if (compact) 6.dp else 12.dp
         val baseAmountSize = if (compact) 34.sp else 42.sp
         val amountFontSize = if (amountText.length > 8) {
             if (compact) 28.sp else 32.sp
@@ -146,9 +138,12 @@ fun HomeScreen(
                         .padding(horizontal = 14.dp, vertical = cardPadding),
                     verticalArrangement = Arrangement.spacedBy(innerGap)
                 ) {
-                    // 金额展示区：只占自身高度，剩余高度全部留给键盘；
-                    // 提醒在上、金额紧随其后，金额上方不再出现一大片空白
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    // 金额展示区：吃掉所有剩余高度，提醒在上、金额靠底部右侧
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
                         if (!todayRecorded) {
                             Row(
                                 modifier = Modifier
@@ -173,7 +168,7 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        Spacer(Modifier.height(amountTopGap))
+                        Spacer(Modifier.weight(1f))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
@@ -245,10 +240,9 @@ fun HomeScreen(
                     }
 
                     NumPad(
-                        modifier = Modifier.weight(1f),
                         canSave = canSave,
                         keyGap = keyGap,
-                        minKeyHeight = minKeyHeight,
+                        keyHeight = keyHeight,
                         savePadding = savePadding,
                         onInput = { key -> amountText = handleInput(amountText, key) },
                         onLongDelete = { amountText = "" },
@@ -358,26 +352,19 @@ private fun CategoryChip(
 private fun NumPad(
     canSave: Boolean,
     keyGap: Dp,
-    minKeyHeight: Dp,
+    keyHeight: Dp,
     savePadding: Dp,
     onInput: (String) -> Unit,
     onLongDelete: () -> Unit,
-    onSave: () -> Unit,
-    modifier: Modifier = Modifier
+    onSave: () -> Unit
 ) {
     val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫")
-    // 四行按键用 weight 吃掉输入卡的全部剩余高度：屏幕越高按键越舒展，
-    // 金额上方不再堆空白，键盘始终贴卡片底部。minKeyHeight 只在极端小屏兜底。
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(keyGap)
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(keyGap)) {
         keys.chunked(3).forEach { row ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .heightIn(min = minKeyHeight),
+                    .height(keyHeight),
                 horizontalArrangement = Arrangement.spacedBy(keyGap)
             ) {
                 row.forEach { key ->

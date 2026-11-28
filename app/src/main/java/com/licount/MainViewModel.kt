@@ -269,19 +269,8 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
             runCatching {
                 withContext(Dispatchers.IO) {
                     val backup = BackupCodec.decode(readText(pending.uri))
-                    // 覆盖前先在事务外留一份完整快照：写不成功就中止覆盖，
-                    // 绝不能出现「提示可撤销、实际没有留底」的丢数据路径
-                    var beforeCount = 0
-                    if (mode == RestoreMode.REPLACE) {
-                        val before = dao.getAllOnce()
-                        beforeCount = before.size
-                        if (before.isEmpty()) {
-                            RestoreSnapshot.clear(app)
-                        } else if (!RestoreSnapshot.save(app, before)) {
-                            RestoreSnapshot.clear(app)
-                            throw IllegalStateException("无法保存原记录快照，已取消覆盖，数据未改动")
-                        }
-                    }
+                    // 覆盖前先留一份完整快照，误点也能一键撤销
+                    val before = if (mode == RestoreMode.REPLACE) dao.getAllOnce() else emptyList()
                     val added = db.withTransaction {
                         val toInsert: List<Transaction> = if (mode == RestoreMode.REPLACE) {
                             dao.deleteAll()
@@ -297,18 +286,17 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
                         if (toInsert.isEmpty()) 0
                         else dao.insertIgnoreAll(toInsert).count { it != -1L }
                     }
-                    if (mode == RestoreMode.REPLACE) _snapshotCount.value = beforeCount
-                    added to beforeCount
+                    if (mode == RestoreMode.REPLACE) {
+                        RestoreSnapshot.save(app, before)
+                        _snapshotCount.value = before.size
+                    }
+                    added
                 }
-            }.onSuccess { (added, beforeCount) ->
+            }.onSuccess { added ->
                 // 用实际入库条数提示，decode 跳过无效条目、IGNORE 跳过重复时数字仍然准确
                 _message.tryEmit(
-                    when {
-                        mode == RestoreMode.REPLACE && beforeCount > 0 ->
-                            "已覆盖恢复 $added 笔记录，原记录可在备份菜单撤销"
-                        mode == RestoreMode.REPLACE -> "已覆盖恢复 $added 笔记录"
-                        else -> "已合并导入 $added 笔新记录（重复项已跳过）"
-                    }
+                    if (mode == RestoreMode.REPLACE) "已覆盖恢复 $added 笔记录，原记录可在备份菜单撤销"
+                    else "已合并导入 $added 笔新记录（重复项已跳过）"
                 )
                 refreshClock()
             }.onFailure { e ->

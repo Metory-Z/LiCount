@@ -166,10 +166,7 @@ fun StatsScreen(
         val cat = Category.byKey(key)
         val list = remember(transactions, key) {
             transactions.filter { it.amountFen > 0 && it.category == key }
-                .sortedWith(
-                    compareByDescending<Transaction> { it.timestamp }
-                        .thenByDescending { it.id }
-                )
+                .sortedByDescending { it.timestamp }
         }
         val sum = list.sumOf { it.amountFen }
         val ratioText = if (totalExpense > 0L) {
