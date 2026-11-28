@@ -29,8 +29,9 @@ import java.util.Locale
  * 首页：一整块记账面板，整页不滚动。
  *
  * 顶部一条紧凑的本月收支信息条；下方一张完整输入卡，内部依次是
- * 金额展示区（吸收剩余高度）、收支切换、单行横滑分类、数字键盘与保存。
- * 键盘始终位于卡片底部、悬浮导航栏上方，任何屏幕高度下都无需上滑。
+ * 提醒槽（固定高度预留，有无提醒均占位）、金额展示区（居中吸收剩余高度）、
+ * 收支切换、单行横滑分类、数字键盘与保存。
+ * 键盘固定行高，始终位于卡片底部、悬浮导航栏上方，任何屏幕高度下都无需上滑。
  * 矮屏通过 BoxWithConstraints 自动收紧间距与按键高度，不引入滚动。
  */
 @Composable
@@ -138,37 +139,48 @@ fun HomeScreen(
                         .padding(horizontal = 14.dp, vertical = cardPadding),
                     verticalArrangement = Arrangement.spacedBy(innerGap)
                 ) {
-                    // 金额展示区：吃掉所有剩余高度，提醒在上、金额靠底部右侧
+                    // 金额展示区：吸收剩余高度，内容垂直居中。
+                    // 提醒槽固定高度预留：有没有「今天没记账」，高度恒定，金额行不跳位。
+                    val reminderSlotHeight = if (compact) 28.dp else 32.dp
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        if (!todayRecorded) {
-                            Row(
-                                modifier = Modifier
-                                    .background(
-                                        MaterialTheme.colorScheme.errorContainer,
-                                        SquircleShape(ControlCorner)
+                        // 固定槽：始终占位，提醒出现/消失时金额不移位
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(reminderSlotHeight),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (!todayRecorded) {
+                                Row(
+                                    modifier = Modifier
+                                        .background(
+                                            MaterialTheme.colorScheme.errorContainer,
+                                            SquircleShape(ControlCorner)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        AppGlyphs.notice,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(15.dp)
                                     )
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    AppGlyphs.notice,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Text(
-                                    "今天还没记账，记一笔吧",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
+                                    Text(
+                                        "今天还没记账，记一笔吧",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
                             }
                         }
-                        Spacer(Modifier.weight(1f))
+                        Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
